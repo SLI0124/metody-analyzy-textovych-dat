@@ -25,7 +25,7 @@ def get_the_most_frequent_n_grams(tokens, n, k):
 
 
 def main():
-    data = load_data("../input/ELRC-antibiotic.cs-en.cs")
+    data = load_data("../input/ELRC-antibiotic.cs-en.cs.txt")
     tokens = tokenize_data(data)
 
     # task 1
