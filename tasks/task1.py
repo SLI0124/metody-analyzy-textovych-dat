@@ -14,7 +14,11 @@ def tokenize_data(data):
 
 
 def create_n_grams(tokens, n):
-    return [tuple(line[i:i + n]) for line in tokens for i in range(len(line) - n + 1)]
+    n_grams = []
+    for line in tokens:
+        for i in range(len(line) - n + 1):
+            n_grams.append(tuple(line[i:i + n]))
+    return n_grams
 
 
 def create_n_grams_dict(tokens, n):
