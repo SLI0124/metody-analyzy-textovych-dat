@@ -1,5 +1,6 @@
 import re
 import random
+import math
 
 
 def load_data(file_path):
@@ -137,6 +138,38 @@ def generate_text(tokens, sentence_count=5, max_sentence_length=20, alpha=1, min
     return "\n\n".join(generated_text)
 
 
+def calculate_perplexity(tokens, n, test_data, alpha=1):
+    def get_ngram_count(ngram_dict, ngram):
+        return ngram_dict.get(ngram, 0)
+
+    n_grams = create_n_grams_dict(tokens, n)
+    n_plus_one_grams = create_n_grams_dict(tokens, n + 1)
+    vocab_size = len(set(word for line in tokens for word in line))
+
+    log_prob_sum = 0
+    N = 0
+
+    for line in test_data:
+        line_tokens = line.split()
+        for i in range(len(line_tokens) - n):
+            context = tuple(line_tokens[i:i + n])
+            next_word = line_tokens[i + n]
+
+            context_count = get_ngram_count(n_grams, context)
+            n_plus_one_gram = context + (next_word,)
+            n_plus_one_count = get_ngram_count(n_plus_one_grams, n_plus_one_gram)
+
+            probability = (n_plus_one_count + alpha) / (context_count + alpha * vocab_size)
+            log_prob_sum += math.log2(probability)
+            N += 1
+
+    if N == 0:
+        return float('inf')  # Avoid division by zero
+
+    perplexity = 2 ** (-log_prob_sum / N)
+    return perplexity
+
+
 def main():
     data = load_data("../input/ELRC-antibiotic.cs-en.cs.txt")
     tokens = tokenize_data(data)
@@ -179,6 +212,20 @@ def main():
     generated_text = generate_text(tokens)
     print("\033[1;32mGenerated text:\033[0m")
     print(generated_text)
+
+    print("\033[1;31mTask 5: Perplexity Evaluation\033[0m")
+    split_index = int(0.8 * len(tokens))
+    train_tokens = tokens[:split_index]
+    test_tokens = tokens[split_index:]
+    
+    test_data = [" ".join(line) for line in test_tokens]
+
+    print("\033[1;34mPerplexity Comparison:\033[0m")
+    for n in range(1, 4):  # one-grams, bi-grams, tri-grams
+        for alpha in [0.1, 1, 5]:
+            perplexity = calculate_perplexity(train_tokens, n, test_data, alpha)
+            print(f"Perplexity for {n}-grams with alpha={alpha}: {perplexity:.4f}")
+        print()
 
 
 if __name__ == "__main__":
