@@ -52,6 +52,55 @@ def calculate_next_word_probability_laplace(tokens, n, alpha=1):
     return next_word_probabilities
 
 
+def predict_next_word(tokens, input_word, context_size=3, alpha=1, top_k=5):
+    n_grams = create_n_grams_dict(tokens, context_size)
+    n_plus_one_grams = create_n_grams_dict(tokens, context_size + 1)
+    vocab = set(word for line in tokens for word in line)
+    vocab_size = len(vocab)
+
+    if not input_word:
+        return []
+
+    predictions = {}
+
+    # Compute probabilities for the next word using context_size + 1-grams
+    for n_plus_one_gram, count in n_plus_one_grams.items():
+        prev_words, next_word = n_plus_one_gram[:-1], n_plus_one_gram[-1]
+        if prev_words[-1] == input_word:
+            probability = (count + alpha) / (n_grams.get(prev_words, 0) + alpha * vocab_size)
+            predictions[next_word] = probability
+
+    found_predictions = sorted(predictions.items(), key=lambda x: x[1], reverse=True)
+
+    # Apply fallback smoothing if no predictions found
+    if not found_predictions:
+        print(f"No direct {context_size}-grams found for '{input_word}', applying Laplace smoothing.")
+        for word in vocab:
+            predictions[word] = alpha / (alpha * vocab_size)
+
+        found_predictions = sorted(predictions.items(), key=lambda x: x[1], reverse=True)
+
+    # Fill in with additional predictions if there are fewer than top_k predictions
+    remaining_predictions = top_k - len(found_predictions)
+    if remaining_predictions > 0:
+        print(f"Less than {top_k} predictions found ({len(found_predictions)}), "
+              f"filling in with additional predictions.")
+
+        # print the found predictions
+        print("Found predictions:", end=" ")
+        for word, prob in found_predictions:
+            print(f"{word}: {prob:.4f}", end=", ")
+        print()
+
+        additional_predictions = [(word, alpha / (alpha * vocab_size)) for word in vocab]
+        additional_predictions = sorted(additional_predictions, key=lambda x: x[1], reverse=True)
+
+        # Add additional predictions to the results
+        found_predictions.extend(additional_predictions[:remaining_predictions])
+
+    return found_predictions[:top_k]
+
+
 def main():
     data = load_data("../input/ELRC-antibiotic.cs-en.cs.txt")
     tokens = tokenize_data(data)
@@ -75,6 +124,20 @@ def main():
                 for next_word, prob in next_word_probs[n_gram].items():
                     print(f"{next_word}: {prob:.4f}")
             print()
+
+    print("\033[1;31mTask 3:\033[0m")
+    while True:
+        input_word = input("Enter a word to predict the next word: (or type 'exit' to quit)\n")
+        if input_word == "exit":
+            break
+        predictions = predict_next_word(tokens, input_word)
+        if predictions:
+            print(f"\nNext word predictions for '{input_word}':")
+            for word, prob in predictions:
+                print(f"{word}: {prob:.4f}")
+            print()
+        else:
+            print("No predictions available.")
 
 
 if __name__ == "__main__":
