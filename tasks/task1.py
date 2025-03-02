@@ -1,4 +1,5 @@
 import re
+import random
 
 
 def load_data(file_path):
@@ -104,6 +105,38 @@ def predict_next_word(tokens, input_word, context_size=3, alpha=1, top_k=5):
     return found_predictions[:top_k]
 
 
+def generate_text(tokens, sentence_count=5, max_sentence_length=20, alpha=1, min_sentence_length=5):
+    n_grams = create_n_grams_dict(tokens, 3)  # tri-grams
+    n_plus_one_grams = create_n_grams_dict(tokens, 4)  # four-grams
+    vocab = set(word for line in tokens for word in line)
+    vocab_size = len(vocab)
+
+    input_word = random.choice([word for line in tokens for word in line if len(word) > 2])
+    print(f"Starting text generation with word: '{input_word}'")
+
+    generated_text = []
+
+    for _ in range(sentence_count):
+        sentence = [input_word]
+        current_word = input_word
+
+        while len(sentence) < max_sentence_length:
+            next_words = calculate_possible_next_words(n_plus_one_grams, n_grams, current_word, alpha, vocab_size)
+            if not next_words:
+                break
+
+            next_word = random.choices(list(next_words.keys()), list(next_words.values()))[0]
+            sentence.append(next_word)
+            current_word = next_word
+
+            if len(sentence) >= min_sentence_length and sentence[-1][-1] in ['.', '?', '!']:
+                break
+
+        generated_text.append(" ".join(sentence).capitalize() + ".")
+
+    return "\n\n".join(generated_text)
+
+
 def main():
     data = load_data("../input/ELRC-antibiotic.cs-en.cs.txt")
     tokens = tokenize_data(data)
@@ -141,6 +174,11 @@ def main():
             print()
         else:
             print("No predictions available.")
+
+    print("\033[1;31mTask 4:\033[0m")
+    generated_text = generate_text(tokens)
+    print("\033[1;32mGenerated text:\033[0m")
+    print(generated_text)
 
 
 if __name__ == "__main__":
