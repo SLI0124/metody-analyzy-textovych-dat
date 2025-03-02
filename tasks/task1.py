@@ -52,6 +52,16 @@ def calculate_next_word_probability_laplace(tokens, n, alpha=1):
     return next_word_probabilities
 
 
+def calculate_possible_next_words(n_plus_one_grams, n_grams, current_word, alpha, vocab_size):
+    possible_next_words = {}
+    for n_plus_one_gram, count in n_plus_one_grams.items():
+        prev_words, next_word = n_plus_one_gram[:-1], n_plus_one_gram[-1]
+        if prev_words[-1] == current_word:
+            probability = (count + alpha) / (n_grams.get(prev_words, 0) + alpha * vocab_size)
+            possible_next_words[next_word] = probability
+    return possible_next_words
+
+
 def predict_next_word(tokens, input_word, context_size=3, alpha=1, top_k=5):
     n_grams = create_n_grams_dict(tokens, context_size)
     n_plus_one_grams = create_n_grams_dict(tokens, context_size + 1)
@@ -61,14 +71,7 @@ def predict_next_word(tokens, input_word, context_size=3, alpha=1, top_k=5):
     if not input_word:
         return []
 
-    predictions = {}
-
-    # Compute probabilities for the next word using context_size + 1-grams
-    for n_plus_one_gram, count in n_plus_one_grams.items():
-        prev_words, next_word = n_plus_one_gram[:-1], n_plus_one_gram[-1]
-        if prev_words[-1] == input_word:
-            probability = (count + alpha) / (n_grams.get(prev_words, 0) + alpha * vocab_size)
-            predictions[next_word] = probability
+    predictions = calculate_possible_next_words(n_plus_one_grams, n_grams, input_word, alpha, vocab_size)
 
     found_predictions = sorted(predictions.items(), key=lambda x: x[1], reverse=True)
 
