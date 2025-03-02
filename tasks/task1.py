@@ -147,7 +147,7 @@ def calculate_perplexity(tokens, n, test_data, alpha=1):
     vocab_size = len(set(word for line in tokens for word in line))
 
     log_prob_sum = 0
-    N = 0
+    n = 0
 
     for line in test_data:
         line_tokens = line.split()
@@ -161,12 +161,12 @@ def calculate_perplexity(tokens, n, test_data, alpha=1):
 
             probability = (n_plus_one_count + alpha) / (context_count + alpha * vocab_size)
             log_prob_sum += math.log2(probability)
-            N += 1
+            n += 1
 
-    if N == 0:
+    if n == 0:
         return float('inf')  # Avoid division by zero
 
-    perplexity = 2 ** (-log_prob_sum / N)
+    perplexity = 2 ** (-log_prob_sum / n)
     return perplexity
 
 
@@ -217,7 +217,7 @@ def main():
     split_index = int(0.8 * len(tokens))
     train_tokens = tokens[:split_index]
     test_tokens = tokens[split_index:]
-    
+
     test_data = [" ".join(line) for line in test_tokens]
 
     print("\033[1;34mPerplexity Comparison:\033[0m")
