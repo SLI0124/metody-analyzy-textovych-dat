@@ -147,10 +147,12 @@ def calculate_perplexity(tokens, n, test_data, alpha=1):
     vocab_size = len(set(word for line in tokens for word in line))
 
     log_prob_sum = 0
-    n = 0
+    total_ngrams = 0
 
     for line in test_data:
         line_tokens = line.split()
+        if len(line_tokens) < n:
+            continue
         for i in range(len(line_tokens) - n):
             context = tuple(line_tokens[i:i + n])
             next_word = line_tokens[i + n]
@@ -161,12 +163,12 @@ def calculate_perplexity(tokens, n, test_data, alpha=1):
 
             probability = (n_plus_one_count + alpha) / (context_count + alpha * vocab_size)
             log_prob_sum += math.log2(probability)
-            n += 1
+            total_ngrams += 1
 
-    if n == 0:
+    if total_ngrams == 0:
         return float('inf')  # Avoid division by zero
 
-    perplexity = 2 ** (-log_prob_sum / n)
+    perplexity = 2 ** (-log_prob_sum / total_ngrams)
     return perplexity
 
 
