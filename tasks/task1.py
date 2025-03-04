@@ -173,7 +173,7 @@ def calculate_perplexity(tokens, n, test_data, alpha=1):
 
 
 def main():
-    data = load_data_to_lowercase("../input/ELRC-antibiotic.cs-en.cs.txt")
+    data = load_data_to_lowercase("../input/task1/ELRC-antibiotic.cs-en.cs.txt")
     tokens = tokenize_data(data)
 
     print("\033[1;31mTask 1:\033[0m")
