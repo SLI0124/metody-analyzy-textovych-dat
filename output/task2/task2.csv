@@ -1,0 +1,28 @@
+Dataset,Pattern,Algorithm,Comparisons,Count,Positions
+Short data,little,brute_force,627,2,"[182, 566]"
+Short data,little,kmp_search_algorithm,47,2,"[182, 566]"
+Short data,little,boyer_moore_search_algorithm,21,2,"[189, 573]"
+Short data,he,brute_force,631,12,"[14, 58, 161, 175, 189, '...']"
+Short data,he,kmp_search_algorithm,42,12,"[14, 58, 161, 175, 189, '...']"
+Short data,he,boyer_moore_search_algorithm,49,12,"[17, 61, 164, 178, 192, '...']"
+Short data,legs,brute_force,629,1,[368]
+Short data,legs,kmp_search_algorithm,43,1,[368]
+Short data,legs,boyer_moore_search_algorithm,10,1,[373]
+Long data,little,brute_force,5283,4,"[182, 566, 1176, 2321]"
+Long data,little,kmp_search_algorithm,246,4,"[182, 566, 1176, 2321]"
+Long data,little,boyer_moore_search_algorithm,143,4,"[189, 573, 1183, 2328]"
+Long data,he,brute_force,5287,114,"[14, 58, 161, 175, 189, '...']"
+Long data,he,kmp_search_algorithm,390,114,"[14, 58, 161, 175, 189, '...']"
+Long data,he,boyer_moore_search_algorithm,437,114,"[17, 61, 164, 178, 192, '...']"
+Long data,legs,brute_force,5285,3,"[368, 1574, 2430]"
+Long data,legs,kmp_search_algorithm,249,3,"[368, 1574, 2430]"
+Long data,legs,boyer_moore_search_algorithm,85,3,"[373, 1579, 2435]"
+DNA data,aagctt,brute_force,1011,1,[985]
+DNA data,aagctt,kmp_search_algorithm,309,1,[985]
+DNA data,aagctt,boyer_moore_search_algorithm,126,1,[990]
+DNA data,cg,brute_force,1015,62,"[8, 14, 36, 54, 63, '...']"
+DNA data,cg,kmp_search_algorithm,311,62,"[8, 14, 36, 54, 63, '...']"
+DNA data,cg,boyer_moore_search_algorithm,209,62,"[11, 16, 38, 56, 66, '...']"
+DNA data,ccg,brute_force,1014,14,"[35, 66, 204, 213, 345, '...']"
+DNA data,ccg,kmp_search_algorithm,263,14,"[35, 66, 204, 213, 345, '...']"
+DNA data,ccg,boyer_moore_search_algorithm,171,14,"[37, 70, 206, 217, 346, '...']"

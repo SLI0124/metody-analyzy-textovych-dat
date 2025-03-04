@@ -1,3 +1,6 @@
+import os
+import csv
+
 from tabulate import tabulate
 
 
@@ -145,7 +148,18 @@ def main():
                 ])
 
     headers = ["Dataset", "Pattern", "Algorithm", "Comparisons", "Count", "Positions"]
+
     print(tabulate(table_data, headers=headers, tablefmt="grid", stralign="center"))
+
+    save_dir = '../output/task2/'
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    file_name_csv = 'task2.csv'
+    with open(save_dir + file_name_csv, 'w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(headers)
+        writer.writerows(table_data)
 
 
 if __name__ == '__main__':
