@@ -84,3 +84,84 @@ Naučit se měřit kvalitu jazykového modelu a pochopit význam perplexity.
     - Co je to perplexity a jak se vypočítává?
     - Jaká je interpretace hodnoty perplexity pro jazykový model?
     - Jak se perplexity mění s rostoucí velikostí n-gramu?
+
+# Cvičení 2: Přímé vyhledávání v textových datech - 7 bodů
+
+V této úloze budete analyzovat různé algoritmy pro vyhledávání vzorů v textu. Zaměříte se na porovnání tří algoritmů:
+hrubé síly, Knuth-Morris-Pratt (KMP) a Boyer-Moore-Horspool (BMH). Cílem je pochopit, kdy je který algoritmus výhodnější
+a jak se chovají při různých typech textů a vzorů. Při řešení této úlohy můžete používat umělou inteligenci v libovolném
+rozsahu.
+
+## Příprava implementací (jednodušší) - 2 body
+
+### Úkol:
+
+- Připravte implementace tří algoritmů: hrubá síla, KMP a BMH (můžete využít AI).
+- Upravte algoritmy tak, aby vracely nejen nalezené pozice vzoru, ale i počet porovnání znaků.
+
+### Cíl:
+
+Získat implementace algoritmů a zajistit, aby poskytovaly statistiky o porovnání znaků.
+
+## Testování na různých datech (střední) - 2 body
+
+### Úkol:
+
+Otestujte implementace na třech různých typech textů:
+
+- Krátký text (~100 znaků)
+- Dlouhý text (~1000 znaků)
+- Náhodně generovaný text z malé abecedy (cca do čtyř znaků, např. sekvence DNA „AGCTAGCT…“)
+
+Pro každý typ textu proveďte testy s alespoň třemi různými vzory.
+
+### Cíl:
+
+Ověřit, jak algoritmy fungují na různých datech.
+
+---
+
+## Porovnání počtu porovnání znaků (střední) - 1 bod
+
+### Úkol:
+
+- Zaznamenejte počet porovnání znaků pro každý algoritmus a každou testovací sadu.
+- Vytvořte tabulku s výsledky.
+
+### Cíl:
+
+Kvantifikovat efektivitu algoritmů.
+
+## Vizualizace výkonu algoritmů (střední) - 1 bod
+
+### Úkol:
+
+- Vytvořte graf, který ukáže efektivitu algoritmů v závislosti na délce textu a vzoru.
+
+### Cíl:
+
+Graficky zobrazit výkonnost algoritmů.
+
+## Analýza a rozhodování o vhodnosti algoritmů (náročnější) - 1 bod
+
+### Úkol:
+
+Odpovězte na následující otázky:
+
+- Kdy se KMP chová lépe než BMH?
+- Kdy je BMH rychlejší než Brute Force?
+- Kdy je KMP nevýhodné používat?
+- Jak algoritmy fungují na textech s opakujícími se vzory?
+
+### Cíl:
+
+Pochopit silné a slabé stránky jednotlivých algoritmů.
+
+## 🎯 Bonusová úloha (+2 body navíc)
+
+### Úkol:
+
+Navrhněte hybridní přístup:
+
+- Vytvořte heuristiku, která na základě délky a vlastností vzoru a textu vybere nejvhodnější algoritmus.
+- Porovnejte výkonnost této strategie oproti jednotlivým algoritmům.
