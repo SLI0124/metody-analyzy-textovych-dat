@@ -3,7 +3,7 @@ import random
 import math
 
 
-def load_data(file_path):
+def load_data_to_lowercase(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read().lower()
 
@@ -173,7 +173,7 @@ def calculate_perplexity(tokens, n, test_data, alpha=1):
 
 
 def main():
-    data = load_data("../input/ELRC-antibiotic.cs-en.cs.txt")
+    data = load_data_to_lowercase("../input/ELRC-antibiotic.cs-en.cs.txt")
     tokens = tokenize_data(data)
 
     print("\033[1;31mTask 1:\033[0m")
