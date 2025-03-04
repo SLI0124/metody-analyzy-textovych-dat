@@ -192,7 +192,7 @@ def main():
         for n_gram, _ in most_frequent_n_grams:
             print(f"\033[1;32mNext word probabilities for \"{' '.join(n_gram)}\":\033[0m")
             if n_gram in next_word_probs:
-                for next_word, prob in next_word_probs[n_gram].items():
+                for next_word, prob in sorted(next_word_probs[n_gram].items(), key=lambda x: x[1], reverse=True):
                     print(f"{next_word}: {prob:.4f}")
             print()
 
