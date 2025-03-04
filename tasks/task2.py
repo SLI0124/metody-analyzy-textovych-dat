@@ -1,3 +1,6 @@
+from tabulate import tabulate
+
+
 def load_data(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
@@ -119,17 +122,30 @@ def main():
     }
 
     algorithms = [brute_force, kmp_search_algorithm, boyer_moore_search_algorithm]
+    table_data = []
 
     for data_name, file_path in data_files.items():
-        print(f"\n=== {data_name} ===")
         data = load_data(file_path)
 
         for pattern in patterns[data_name]:
-            print(f"\nPattern: '{pattern}'")
             for algorithm in algorithms:
                 comparisons, count, positions = algorithm(data, pattern)
-                print(f"  - {algorithm.__name__:<25}\n\t-Comparisons: {comparisons:<6}\n\t-Count: {count:<4}"
-                      f"\n\t-Positions: {positions}")
+
+                truncated_positions = positions[:5] if len(positions) > 5 else positions
+                if len(positions) > 5:
+                    truncated_positions.append('...')
+
+                table_data.append([
+                    data_name,
+                    pattern,
+                    algorithm.__name__,
+                    comparisons,
+                    count,
+                    str(truncated_positions)
+                ])
+
+    headers = ["Dataset", "Pattern", "Algorithm", "Comparisons", "Count", "Positions"]
+    print(tabulate(table_data, headers=headers, tablefmt="grid", stralign="center"))
 
 
 if __name__ == '__main__':
