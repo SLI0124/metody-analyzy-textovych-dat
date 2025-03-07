@@ -104,7 +104,7 @@ def boyer_moore_search_algorithm(data, pattern):
 
         if j < 0:
             shift += (m - bad_characters[ord(data[shift + m])] if shift + m < n else 1)
-            positions.append(shift)
+            positions.append(shift - len(pattern) - 1)
         else:
             shift += max(1, j - bad_characters[ord(data[shift + j])])
 
