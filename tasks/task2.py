@@ -126,6 +126,7 @@ def main():
 
     algorithms = [brute_force, kmp_search_algorithm, boyer_moore_search_algorithm]
     table_data = []
+    csv_data = []
 
     for data_name, file_path in data_files.items():
         data = load_data(file_path)
@@ -147,6 +148,15 @@ def main():
                     str(truncated_positions)
                 ])
 
+                csv_data.append([
+                    data_name,
+                    pattern,
+                    algorithm.__name__,
+                    comparisons,
+                    count,
+                    positions
+                ])
+
     headers = ["Dataset", "Pattern", "Algorithm", "Comparisons", "Count", "Positions"]
 
     print(tabulate(table_data, headers=headers, tablefmt="grid", stralign="center"))
@@ -159,7 +169,7 @@ def main():
     with open(save_dir + file_name_csv, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         writer.writerow(headers)
-        writer.writerows(table_data)
+        writer.writerows(csv_data)
 
 
 if __name__ == '__main__':
