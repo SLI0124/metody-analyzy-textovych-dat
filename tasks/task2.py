@@ -2,6 +2,8 @@ import os
 import csv
 
 from tabulate import tabulate
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def load_data(file_path):
@@ -127,6 +129,10 @@ def main():
     algorithms = [brute_force, kmp_search_algorithm, boyer_moore_search_algorithm]
     table_data = []
     csv_data = []
+    plot_data = {
+        "labels": [],
+        "comparisons": []
+    }
 
     for data_name, file_path in data_files.items():
         data = load_data(file_path)
@@ -157,6 +163,9 @@ def main():
                     positions
                 ])
 
+                plot_data["comparisons"].append(comparisons)
+                plot_data["labels"].append(f"{data_name} - {pattern} - {algorithm.__name__}")
+
     headers = ["Dataset", "Pattern", "Algorithm", "Comparisons", "Count", "Positions"]
 
     print(tabulate(table_data, headers=headers, tablefmt="grid", stralign="center"))
@@ -170,6 +179,55 @@ def main():
         writer = csv.writer(file)
         writer.writerow(headers)
         writer.writerows(csv_data)
+
+        colors = ['purple', 'orange', 'red', 'blue', 'green', 'cyan']
+
+        alg_names_dict = {
+            "brute_force": "Brute Force",
+            "kmp_search_algorithm": "KMP",
+            "boyer_moore_search_algorithm": "Boyer Moore"
+        }
+
+        for data_name in data_files.keys():
+            dataset_labels = []
+            dataset_comparisons = []
+            dataset_patterns = []
+            dataset_algorithms = []
+
+            for i, label in enumerate(plot_data["labels"]):
+                if label.startswith(data_name):
+                    parts = label.split(" - ")
+                    dataset_patterns.append(parts[1])  # Extract pattern
+                    dataset_algorithms.append(parts[2])  # Extract algorithm
+                    dataset_labels.append(label)  # Full label for ordering
+                    dataset_comparisons.append(plot_data["comparisons"][i])
+
+            if dataset_labels:
+                color_map = dict(zip(set(dataset_patterns), colors))
+
+                fig, ax = plt.subplots(figsize=(12, 5))
+                y_positions = np.arange(len(dataset_labels))
+
+                pattern_legend_shown = set()
+
+                for i, (comparison, pattern, algorithm) in enumerate(
+                        zip(dataset_comparisons, dataset_patterns, dataset_algorithms)):
+                    color = color_map[pattern]
+                    if pattern not in pattern_legend_shown:
+                        ax.barh(y_positions[i], comparison, color=color, label=pattern)  # Add to legend
+                        pattern_legend_shown.add(pattern)
+                    else:
+                        ax.barh(y_positions[i], comparison, color=color)  # No duplicate label
+
+                ax.set_title(f'Comparisons for {data_name}')
+                ax.set_xlabel('Comparisons')
+                ax.set_yticks(y_positions)
+                ax.set_yticklabels([alg_names_dict[alg] for alg in dataset_algorithms])
+                ax.legend(title="Patterns")
+
+                plt.tight_layout()
+                plt.savefig(save_dir + f"{data_name}.png")
+                plt.show()
 
 
 if __name__ == '__main__':
