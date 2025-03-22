@@ -119,8 +119,6 @@ Pro každý typ textu proveďte testy s alespoň třemi různými vzory.
 
 Ověřit, jak algoritmy fungují na různých datech.
 
----
-
 ## Porovnání počtu porovnání znaků (střední) - 1 bod
 
 ### Úkol:
@@ -165,3 +163,55 @@ Navrhněte hybridní přístup:
 
 - Vytvořte heuristiku, která na základě délky a vlastností vzoru a textu vybere nejvhodnější algoritmus.
 - Porovnejte výkonnost této strategie oproti jednotlivým algoritmům.
+
+# Cvičení 3 - Automatická oprava slov a vyhledávání s chybou - 7 bodů
+
+V této úloze budete implementovat algoritmus pro automatickou opravu slov a analyzovat efektivitu různých přístupů k
+vyhledávání slov s chybou. Základní inspirací pro implementaci je známý algoritmus Petera Norwiga. Vaším cílem bude
+implementovat výpočet editační vzdálenosti a následně vytvořit systém pro automatickou opravu slov na základě
+pravděpodobnosti výskytu slov ve slovníku. Při řešení této úlohy můžete používat umělou inteligenci v libovolném
+rozsahu.
+
+## Výpočet editační vzdálenosti (jednodušší) - 3 body
+
+### Úkol:
+
+- Implementujte algoritmus pro výpočet Levenshteinovy vzdálenosti mezi dvěma slovy.
+- Otestujte vaši implementaci na vlastních datech – vyberte několik dvojic slov a ověřte, zda vzdálenost odpovídá
+  očekávání.
+
+### Cíl:
+
+Porozumět principu editační vzdálenosti a zajistit správnou implementaci.
+
+## Implementace automatické opravy slov (střední) - 4 body
+
+### Příprava slovníku - 1 bod
+
+- Vytvořte slovník slov na základě zvoleného datasetu.
+- Uložte frekvenci jednotlivých slov, aby bylo možné určit jejich pravděpodobnost výskytu.
+
+### Generování variant slov - 1 bod
+
+- Pro vstupní slovo vygenerujte všechny možné varianty slov s editační vzdáleností maximálně 2.
+- Uvažujte operace vložení, smazání, nahrazení, prohození sousedů.
+- Zjistěte počet variant.
+
+### Výběr nejpravděpodobnějšího slova - 1 bod
+
+- Z vygenerovaných variant vyberte nejpravděpodobnější slovo podle jeho četnosti ve slovníku.
+- Opravte následující větu:  
+  _Dneska si dám oběť v restauarci a pak půjdu zpěť domů, kde se podívám na televezí._
+
+### Alternativní přístup a porovnání efektivity - 1 bod
+
+- Místo generování variant vypočítejte editační vzdálenost ke všem slovům ve slovníku a vyberte nejbližší kandidáty.
+- Porovnejte výpočetní složitost a kvalitu výsledků obou přístupů.
+- Pro délku _n_ nějakého slova určete počet vygenerovaných variant.
+
+## 🎯 Bonusová úloha (+2 body navíc)
+
+- Vylepšení výpočtu pravděpodobnosti pomocí n-gram modelu:
+    - Navrhněte a implementujte vylepšený systém, který využívá n-gramy a podmíněné pravděpodobnosti pro určení
+      nejpravděpodobnějšího opraveného slova.
+    - Porovnejte výsledky s původním přístupem a analyzujte zlepšení.
