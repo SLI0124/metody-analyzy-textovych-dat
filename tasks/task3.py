@@ -102,6 +102,54 @@ def generate_word_variants(word, max_distance=2):
     return variants
 
 
+def autocorrect_word(word, word_counts, max_distance=2):
+    if word in word_counts:
+        return word
+
+    variants = generate_word_variants(word, max_distance)
+    valid_candidates = {}
+    for variant in variants:
+        if variant in word_counts:
+            valid_candidates[variant] = word_counts[variant]
+
+    return max(valid_candidates.items(), key=lambda x: x[1])[0]
+
+
+def autocorrect_sentence(sentence, word_counts, max_distance=2):
+    def tokenize(innie_sentence):
+        innie_words, current_word = [], ""
+        for char in innie_sentence:
+            if char.isalnum() or char in "áčďéěíňóřšťúůýž":
+                current_word += char
+            else:
+                if current_word:
+                    innie_words.append(current_word)
+                    current_word = ""
+                if char.strip():
+                    innie_words.append(char)
+        if current_word:
+            innie_words.append(current_word)
+        return innie_words
+
+    punctuation = ".,!?;:()"
+
+    words = tokenize(sentence)
+    corrected_words = []
+    for word in words:
+        if word in punctuation:
+            corrected_words.append(word)
+        else:
+            corrected_words.append(autocorrect_word(word.lower(), word_counts, max_distance))
+
+    corrected_sentence = corrected_words[0].capitalize()
+    for i in range(1, len(corrected_words)):
+        if corrected_words[i] not in punctuation and corrected_words[i - 1] not in "(:":
+            corrected_sentence += " "
+        corrected_sentence += corrected_words[i]
+
+    return corrected_sentence
+
+
 def main():
     print(f"\033[91mFirst task\033[0m")
     desired_word = "kitchen"
@@ -132,6 +180,18 @@ def main():
         sample_variants = random.sample(list(variants), number_of_examples)
         print(f"Sample of variants: {sample_variants}...")
         print()
+
+    print(f"\033[91mFourth task - Autocorrection\033[0m")
+    test_sentence = "Dneska si dám oběť v restauarci a pak půjdu zpěť domů, kde se podívám na televezí."
+    print(f"\nOriginal sentence: {test_sentence}\n")
+
+    corrected_sentence = autocorrect_sentence(test_sentence, word_counts)
+    print(f"Corrected sentence: {corrected_sentence}\n")
+
+    misspelled_words = ["oběť", "restauarci", "zpěť", "televezí"]
+    for word in misspelled_words:
+        correction = autocorrect_word(word, word_counts)
+        print(f"'{word}' → '{correction}'")
 
 
 if __name__ == "__main__":
