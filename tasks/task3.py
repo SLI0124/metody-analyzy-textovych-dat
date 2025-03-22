@@ -1,4 +1,5 @@
 from tabulate import tabulate
+import random
 
 
 def levenstein_distance_dp(word1, word2):
@@ -59,6 +60,48 @@ def get_most_common_words(word_counts, top_n=50):
     return sorted_word_counts[:top_n]
 
 
+def generate_word_variants(word, max_distance=2):
+    def generate_edits(innie_word):
+        alphabet = 'abcdefghijklmnopqrstuvwxyzáčďéěíňóřšťúůýž'
+        splits = []  # Generate all possible splits of the word and from them generate edits
+        for i in range(len(innie_word) + 1):
+            splits.append((innie_word[:i], innie_word[i:]))
+
+        deletions = []
+        for left, right in splits:
+            if right:
+                deletions.append(left + right[1:])
+
+        insertions = []
+        for left, right in splits:
+            for char in alphabet:
+                insertions.append(left + char + right)
+
+        replacements = []
+        for left, right in splits:
+            if right:
+                for char in alphabet:
+                    replacements.append(left + char + right[1:])
+
+        transpositions = []
+        for left, right in splits:
+            if len(right) > 1:
+                transpositions.append(left + right[1] + right[0] + right[2:])
+
+        return set(deletions + insertions + replacements + transpositions)
+
+    variants = {word}  # Include the original word
+
+    edits_distance = generate_edits(word)
+    variants.update(edits_distance)
+
+    if max_distance > 1:  # generate more levels of edits recursively
+        for edit in edits_distance:
+            variants.update(generate_edits(edit))
+
+    return variants
+
+
 def main():
     print(f"\033[91mFirst task\033[0m")
     desired_word = "kitchen"
@@ -74,6 +117,21 @@ def main():
     word_counts = build_czech_dictionary(filepath)
     most_common_words = get_most_common_words(word_counts)
     print(tabulate(most_common_words, headers=["Word", "Frequency"], tablefmt='fancy_outline'))
+
+    print(f"\033[91mThird task - Word Variants\033[0m")
+    random_number_word_count = 3
+    random_words = random.sample(list(word_counts.keys()), random_number_word_count)
+    print(f"Random words from the dataset: {random_words}")
+    max_distance = 2
+    for test_word in random_words:
+        variants = generate_word_variants(test_word, max_distance)
+        variant_count = len(variants)
+        print(f"Word: '{test_word}'")
+        print(f"Number of variants (edit distance ≤ {max_distance}): {variant_count}")
+        number_of_examples = 5
+        sample_variants = random.sample(list(variants), number_of_examples)
+        print(f"Sample of variants: {sample_variants}...")
+        print()
 
 
 if __name__ == "__main__":
