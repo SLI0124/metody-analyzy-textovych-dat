@@ -173,15 +173,10 @@ def autocorrect_sentence(sentence, word_counts, max_distance=2, approach='varian
     return corrected_sentence
 
 
-def autocorrect_word_ngram_approach(word, word_counts, tokens, context_words, max_distance=2):
-    """
-    Autocorrect using only n-gram probabilities with context.
-    Returns the candidate with highest probability given the context.
-    """
+def autocorrect_word_ngram_approach(word, word_counts, tokens, context_words, max_distance=2, context_size=2):
     if word in word_counts:
         return word
 
-    # Generate candidate corrections within max edit distance
     candidates = set()
     for dict_word in word_counts:
         distance, _ = levenstein_distance_dp(word, dict_word)
@@ -191,10 +186,7 @@ def autocorrect_word_ngram_approach(word, word_counts, tokens, context_words, ma
     if not candidates:
         return word
 
-    # Calculate n-gram probabilities for each candidate
     n_gram_probs = {}
-    context_size = min(2, len(context_words))  # Use bi-gram or tri-gram context
-
     for candidate in candidates:
         # Calculate probability of candidate given previous words
         prob = 1.0
@@ -208,7 +200,7 @@ def autocorrect_word_ngram_approach(word, word_counts, tokens, context_words, ma
 
         n_gram_probs[candidate] = prob
 
-    # Return candidate with highest n-gram probability
+    # Return candidate with the highest n-gram probability
     return max(n_gram_probs.items(), key=lambda x: x[1])[0] if n_gram_probs else word
 
 
@@ -278,71 +270,72 @@ def compare_all_approaches(test_words, word_counts, tokens):
 
 
 def main():
-    print(f"\033[91mFirst task\033[0m")
+    print(f"\033[91m\n=== Task 1: Levenshtein Distance Calculation ===\033[0m")
     desired_word = "kitchen"
     words = ["kitchen", "kitten", "sitten", "sittin", "sitting"]
     for word in words:
         distance, dp_table = levenstein_distance_dp(desired_word, word)
-        print(f"Levenstein distance between '{desired_word}' and '{word}': {distance}")
+        print(f"\033[94mSubtask:\033[0m Distance between '{desired_word}' and '{word}': {distance}")
         print_dp_table(desired_word, word, dp_table)
         print()
 
-    print(f"\033[91mSecond task\033[0m")
+    print(f"\033[91m\n=== Task 2: Czech Dictionary Building ===\033[0m")
     filepath = "../input/task3/hp_1.txt"
     word_counts = build_czech_dictionary(filepath)
+    print("\033[94mSubtask:\033[0m Most common words:")
     most_common_words = get_most_common_words(word_counts)
     print(tabulate(most_common_words, headers=["Word", "Frequency"], tablefmt='fancy_outline'))
 
-    print(f"\033[91mThird task - Word Variants\033[0m")
+    print(f"\033[91m\n=== Task 3: Word Variants Generation ===\033[0m")
     random_number_word_count = 3
     random_words = random.sample(list(word_counts.keys()), random_number_word_count)
-    print(f"Random words from the dataset: {random_words}")
+    print(f"\033[94mSubtask:\033[0m Random words from the dataset: {random_words}")
     max_distance = 2
     for test_word in random_words:
         variants = generate_word_variants(test_word, max_distance)
         variant_count = len(variants)
-        print(f"Word: '{test_word}'")
+        print(f"\n\033[94mSubtask:\033[0m Word: '{test_word}'")
         print(f"Number of variants (edit distance ≤ {max_distance}): {variant_count}")
         number_of_examples = 5
         sample_variants = random.sample(list(variants), number_of_examples)
         print(f"Sample of variants: {sample_variants}...")
-        print()
 
-    print(f"\033[91mFourth task - Autocorrection\033[0m")
+    print(f"\033[91m\n=== Task 4: Autocorrection (Variant Approach) ===\033[0m")
     test_sentence = "Dneska si dám oběť v restauarci a pak půjdu zpěť domů, kde se podívám na televezí."
-    print(f"\nOriginal sentence: {test_sentence}\n")
+    print(f"\n\033[94mSubtask:\033[0m Original sentence: {test_sentence}\n")
 
     corrected_sentence = autocorrect_sentence(test_sentence, word_counts, approach='variant')
-    print(f"Corrected sentence (Variant Approach): {corrected_sentence}\n")
+    print(f"\033[94mSubtask:\033[0m Corrected sentence (Variant Approach): {corrected_sentence}\n")
 
     misspelled_words = ["oběť", "restauarci", "zpěť", "televezí"]
+    print("\033[94mSubtask:\033[0m Individual word corrections:")
     for word in misspelled_words:
         correction = autocorrect_word_variant_approach(word, word_counts)
         print(f"'{word}' → '{correction}'")
 
-    print(f"\n\033[91mFifth task - Alternative Approach & Comparison\033[0m")
-    print(f"\nOriginal sentence: {test_sentence}\n")
+    print(f"\033[91m\n=== Task 5: Alternative Approach (Dictionary Scan) ===\033[0m")
+    print(f"\n\033[94mSubtask:\033[0m Original sentence: {test_sentence}\n")
 
     corrected_sentence = autocorrect_sentence(test_sentence, word_counts, approach='dict')
-    print(f"Corrected sentence (Dictionary Approach): {corrected_sentence}\n")
+    print(f"\033[94mSubtask:\033[0m Corrected sentence (Dictionary Approach): {corrected_sentence}\n")
 
+    print("\033[94mSubtask:\033[0m Individual word corrections:")
     for word in misspelled_words:
         correction = autocorrect_word_dict_approach(word, word_counts)
         print(f"'{word}' → '{correction}'")
 
-    print(f"\n\033[91mSixth task - N-gram Enhanced Autocorrection\033[0m")
-
+    print(f"\033[91m\n=== Task 6: N-gram Enhanced Autocorrection ===\033[0m")
     data = load_data_to_lowercase("../input/task3/hp_1.txt")
     tokens = tokenize_data(data)
 
-    test_sentence = "Dneska si dám oběť v restauarci a pak půjdu zpěť domů, kde se podívám na televezí."
-    print(f"\nOriginal sentence: {test_sentence}\n")
-
+    print(f"\n\033[94mSubtask:\033[0m Original sentence: {test_sentence}\n")
     corrected_sentence = autocorrect_sentence_ngram(test_sentence, word_counts, tokens)
-    print(f"Corrected sentence (N-gram Enhanced): {corrected_sentence}\n")
+    print(f"\033[94mSubtask:\033[0m Corrected sentence (N-gram Enhanced): {corrected_sentence}\n")
 
-    test_comparison_words = ["restauarci", "oběť", "oběd", "zpěť", "televezí", "kavarna", "knjha", "kufrr", "fletn",
-                             "drač", "lod", "kost", "košť"]
+    test_comparison_words = ["restauarci", "oběť", "oběd", "zpěť", "televezí",
+                             "kavarna", "knjha", "kufrr", "fletn", "dračč",
+                             "lod", "kost", "košť"]
+    print("\033[94mSubtask:\033[0m Approach comparison:")
     compare_all_approaches(test_comparison_words, word_counts, tokens)
 
 
