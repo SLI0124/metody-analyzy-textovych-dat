@@ -28,11 +28,11 @@ def levenstein_distance_dp(word1, word2):
 
 
 def print_dp_table(word1, word2, dp):
-    headers = [''] + list(word2)
+    headers = ['ε'] + list(word2)
 
     table_data = []
     for i, row in enumerate(dp):
-        row_header = '' if i == 0 else word1[i - 1]
+        row_header = 'ε' if i == 0 else word1[i - 1]
         table_data.append([row_header] + row)
 
     print(tabulate(table_data, headers=headers, tablefmt='fancy_grid'))
