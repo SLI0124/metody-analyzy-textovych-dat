@@ -103,7 +103,7 @@ def generate_word_variants(word, max_distance=2):
     return variants
 
 
-def autocorrect_word(word, word_counts, max_distance=2):
+def autocorrect_word_variant_approach(word, word_counts, max_distance=2):
     if word in word_counts:
         return word
 
@@ -116,43 +116,7 @@ def autocorrect_word(word, word_counts, max_distance=2):
     return max(valid_candidates.items(), key=lambda x: x[1])[0] if valid_candidates else word
 
 
-def tokenize(innie_sentence):
-    innie_words, current_word = [], ""
-    for char in innie_sentence:
-        if char.isalnum() or char in "áčďéěíňóřšťúůýž":
-            current_word += char
-        else:
-            if current_word:
-                innie_words.append(current_word)
-                current_word = ""
-            if char.strip():
-                innie_words.append(char)
-    if current_word:
-        innie_words.append(current_word)
-    return innie_words
-
-
-def autocorrect_sentence(sentence, word_counts, max_distance=2):
-    punctuation = ".,!?;:()"
-
-    words = tokenize(sentence)
-    corrected_words = []
-    for word in words:
-        if word in punctuation:
-            corrected_words.append(word)
-        else:
-            corrected_words.append(autocorrect_word(word.lower(), word_counts, max_distance))
-
-    corrected_sentence = corrected_words[0].capitalize()
-    for i in range(1, len(corrected_words)):
-        if corrected_words[i] not in punctuation and corrected_words[i - 1] not in "(:":
-            corrected_sentence += " "
-        corrected_sentence += corrected_words[i]
-
-    return corrected_sentence
-
-
-def autocorrect_word_alternative(word, word_counts, max_distance=2):
+def autocorrect_word_dict_approach(word, word_counts, max_distance=2):
     if word in word_counts:
         return word
 
@@ -165,8 +129,31 @@ def autocorrect_word_alternative(word, word_counts, max_distance=2):
     return max(candidates.items(), key=lambda x: x[1])[0] if candidates else word
 
 
-def autocorrect_sentence_alternative(sentence, word_counts, max_distance=2):
+def tokenize(sentence):
+    words, current_word = [], ""
+    for char in sentence:
+        if char.isalnum() or char in "áčďéěíňóřšťúůýž":
+            current_word += char
+        else:
+            if current_word:
+                words.append(current_word)
+                current_word = ""
+            if char.strip():
+                words.append(char)
+    if current_word:
+        words.append(current_word)
+    return words
+
+
+def autocorrect_sentence(sentence, word_counts, max_distance=2, approach='variant'):
     punctuation = ".,!?;:()"
+
+    if approach == 'variant':
+        corrector = autocorrect_word_variant_approach
+    elif approach == 'dict':
+        corrector = autocorrect_word_dict_approach
+    else:
+        raise ValueError("Invalid approach. Use 'variant' or 'dict'")
 
     words = tokenize(sentence)
     corrected_words = []
@@ -174,11 +161,11 @@ def autocorrect_sentence_alternative(sentence, word_counts, max_distance=2):
         if word in punctuation:
             corrected_words.append(word)
         else:
-            corrected_words.append(autocorrect_word_alternative(word.lower(), word_counts, max_distance))
+            corrected_words.append(corrector(word.lower(), word_counts, max_distance))
 
     corrected_sentence = corrected_words[0].capitalize()
     for i in range(1, len(corrected_words)):
-        if corrected_words[i] not in punctuation and corrected_words[i - 1] not in "(:":
+        if corrected_words[i] not in punctuation:
             corrected_sentence += " "
         corrected_sentence += corrected_words[i]
 
@@ -189,14 +176,12 @@ def compare_approaches(test_words, word_counts):
     results = []
 
     for word in test_words:
-        # Approach 1: Variant Generation
         start_variant = time.time()
-        correction1 = autocorrect_word(word, word_counts)
+        correction1 = autocorrect_word_variant_approach(word, word_counts)
         time_variant = time.time() - start_variant
 
-        # Approach 2: Dictionary Scan
         start_dict_scan = time.time()
-        correction2 = autocorrect_word_alternative(word, word_counts)
+        correction2 = autocorrect_word_dict_approach(word, word_counts)
         time_dict_scan = time.time() - start_dict_scan
 
         results.append([
@@ -251,22 +236,22 @@ def main():
     test_sentence = "Dneska si dám oběť v restauarci a pak půjdu zpěť domů, kde se podívám na televezí."
     print(f"\nOriginal sentence: {test_sentence}\n")
 
-    corrected_sentence = autocorrect_sentence(test_sentence, word_counts)
-    print(f"Corrected sentence: {corrected_sentence}\n")
+    corrected_sentence = autocorrect_sentence(test_sentence, word_counts, approach='variant')
+    print(f"Corrected sentence (Variant Approach): {corrected_sentence}\n")
 
     misspelled_words = ["oběť", "restauarci", "zpěť", "televezí"]
     for word in misspelled_words:
-        correction = autocorrect_word(word, word_counts)
+        correction = autocorrect_word_variant_approach(word, word_counts)
         print(f"'{word}' → '{correction}'")
 
     print(f"\n\033[91mFifth task - Alternative Approach & Comparison\033[0m")
     print(f"\nOriginal sentence: {test_sentence}\n")
 
-    corrected_sentence = autocorrect_sentence_alternative(test_sentence, word_counts)
-    print(f"Corrected sentence (Alternative Approach): {corrected_sentence}\n")
+    corrected_sentence = autocorrect_sentence(test_sentence, word_counts, approach='dict')
+    print(f"Corrected sentence (Dictionary Approach): {corrected_sentence}\n")
 
     for word in misspelled_words:
-        correction = autocorrect_word_alternative(word, word_counts)
+        correction = autocorrect_word_dict_approach(word, word_counts)
         print(f"'{word}' → '{correction}'")
 
     test_comparison_words = ["restauarci", "oběť", "oběd", "zpěť", "televezí", "kavarna", "knjha", "kufrr"]
