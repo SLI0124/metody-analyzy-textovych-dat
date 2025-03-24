@@ -1,6 +1,7 @@
 from tabulate import tabulate
 import random
 import time
+from task1 import tokenize_data, create_n_grams_dict, load_data_to_lowercase
 
 
 def levenstein_distance_dp(word1, word2):
@@ -46,7 +47,7 @@ def build_czech_dictionary(file_path):
         text = file.read()
 
     text = text.replace('\n', ' ').lower()
-    for char in '.,!?;:()[]{}"/\\@#$%^&*+=|<>':
+    for char in '.,!?;:()[]{}"/\\@#$%^&*+=|<>\"\'“':
         text = text.replace(char, ' ')
 
     words = text.split()
@@ -172,7 +173,76 @@ def autocorrect_sentence(sentence, word_counts, max_distance=2, approach='varian
     return corrected_sentence
 
 
-def compare_approaches(test_words, word_counts):
+def autocorrect_word_ngram_approach(word, word_counts, tokens, context_words, max_distance=2):
+    """
+    Autocorrect using only n-gram probabilities with context.
+    Returns the candidate with highest probability given the context.
+    """
+    if word in word_counts:
+        return word
+
+    # Generate candidate corrections within max edit distance
+    candidates = set()
+    for dict_word in word_counts:
+        distance, _ = levenstein_distance_dp(word, dict_word)
+        if distance <= max_distance:
+            candidates.add(dict_word)
+
+    if not candidates:
+        return word
+
+    # Calculate n-gram probabilities for each candidate
+    n_gram_probs = {}
+    context_size = min(2, len(context_words))  # Use bi-gram or tri-gram context
+
+    for candidate in candidates:
+        # Calculate probability of candidate given previous words
+        prob = 1.0
+        for i in range(1, context_size + 1):
+            if i <= len(context_words):
+                context = tuple(context_words[-i:] + [candidate])
+                n_grams = create_n_grams_dict(tokens, len(context))
+                context_count = n_grams.get(context, 0)
+                total_context = sum(1 for ng in n_grams if ng[:-1] == context[:-1])
+                prob *= (context_count + 1) / (total_context + len(word_counts))  # Laplace smoothing
+
+        n_gram_probs[candidate] = prob
+
+    # Return candidate with highest n-gram probability
+    return max(n_gram_probs.items(), key=lambda x: x[1])[0] if n_gram_probs else word
+
+
+def autocorrect_sentence_ngram(sentence, word_counts, tokens, max_distance=2):
+    words = tokenize(sentence)
+    corrected_words = []
+    context_words = []
+
+    for word in words:
+        if word in ".,!?;:()":
+            corrected_words.append(word)
+            continue
+
+        correction = autocorrect_word_ngram_approach(
+            word.lower(),
+            word_counts,
+            tokens,
+            context_words,
+            max_distance
+        )
+
+        corrected_words.append(correction)
+        context_words.append(correction.lower())
+
+    corrected_sentence = corrected_words[0].capitalize()
+    for i in range(1, len(corrected_words)):
+        if corrected_words[i] not in ".,!?;:()":
+            corrected_sentence += " "
+        corrected_sentence += corrected_words[i]
+
+    return corrected_sentence
+
+
+def compare_all_approaches(test_words, word_counts, tokens):
     results = []
 
     for word in test_words:
@@ -180,23 +250,29 @@ def compare_approaches(test_words, word_counts):
         correction1 = autocorrect_word_variant_approach(word, word_counts)
         time_variant = time.time() - start_variant
 
-        start_dict_scan = time.time()
+        start_dict = time.time()
         correction2 = autocorrect_word_dict_approach(word, word_counts)
-        time_dict_scan = time.time() - start_dict_scan
+        time_dict = time.time() - start_dict
+
+        start_ngram = time.time()
+        correction3 = autocorrect_word_ngram_approach(word, word_counts, tokens, [])
+        time_ngram = time.time() - start_ngram
 
         results.append([
             word,
             correction1,
             correction2,
+            correction3,
             f"{time_variant:.6f}s",
-            f"{time_dict_scan:.6f}s",
-            "Same" if correction1 == correction2 else "Different"
+            f"{time_dict:.6f}s",
+            f"{time_ngram:.6f}s",
+            "All same" if correction1 == correction2 == correction3 else "Different"
         ])
 
     print(tabulate(
         results,
-        headers=["Misspelled", "Variant Approach", "Dict Scan Approach",
-                 "Time (Variant)", "Time (Dict Scan)", "Agreement"],
+        headers=["Misspelled", "Variant", "Dict Scan", "N-gram",
+                 "Time (V)", "Time (D)", "Time (N)", "Agreement"],
         tablefmt='fancy_grid'
     ))
 
@@ -254,8 +330,20 @@ def main():
         correction = autocorrect_word_dict_approach(word, word_counts)
         print(f"'{word}' → '{correction}'")
 
-    test_comparison_words = ["restauarci", "oběť", "oběd", "zpěť", "televezí", "kavarna", "knjha", "kufrr"]
-    compare_approaches(test_comparison_words, word_counts)
+    print(f"\n\033[91mSixth task - N-gram Enhanced Autocorrection\033[0m")
+
+    data = load_data_to_lowercase("../input/task3/hp_1.txt")
+    tokens = tokenize_data(data)
+
+    test_sentence = "Dneska si dám oběť v restauarci a pak půjdu zpěť domů, kde se podívám na televezí."
+    print(f"\nOriginal sentence: {test_sentence}\n")
+
+    corrected_sentence = autocorrect_sentence_ngram(test_sentence, word_counts, tokens)
+    print(f"Corrected sentence (N-gram Enhanced): {corrected_sentence}\n")
+
+    test_comparison_words = ["restauarci", "oběť", "oběd", "zpěť", "televezí", "kavarna", "knjha", "kufrr", "fletn",
+                             "drač", "lod", "kost", "košť"]
+    compare_all_approaches(test_comparison_words, word_counts, tokens)
 
 
 if __name__ == "__main__":
