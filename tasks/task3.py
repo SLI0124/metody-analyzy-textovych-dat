@@ -47,7 +47,7 @@ def build_czech_dictionary(file_path):
         text = file.read()
 
     text = text.replace('\n', ' ').lower()
-    for char in '.,!?;:()[]{}"/\\@#$%^&*+=|<>\"\'“':
+    for char in '.,!?;:()[]{}"/\\@#$%^&*+=|<>\"\'“”':
         text = text.replace(char, ' ')
 
     words = text.split()
