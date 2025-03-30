@@ -164,7 +164,7 @@ Navrhněte hybridní přístup:
 - Vytvořte heuristiku, která na základě délky a vlastností vzoru a textu vybere nejvhodnější algoritmus.
 - Porovnejte výkonnost této strategie oproti jednotlivým algoritmům.
 
-# Cvičení 3 - Automatická oprava slov a vyhledávání s chybou - 7 bodů
+# Cvičení 3: Automatická oprava slov a vyhledávání s chybou - 7 bodů
 
 V této úloze budete implementovat algoritmus pro automatickou opravu slov a analyzovat efektivitu různých přístupů k
 vyhledávání slov s chybou. Základní inspirací pro implementaci je známý algoritmus Petera Norwiga. Vaším cílem bude
@@ -215,3 +215,69 @@ Porozumět principu editační vzdálenosti a zajistit správnou implementaci.
     - Navrhněte a implementujte vylepšený systém, který využívá n-gramy a podmíněné pravděpodobnosti pro určení
       nejpravděpodobnějšího opraveného slova.
     - Porovnejte výsledky s původním přístupem a analyzujte zlepšení.
+
+# Cvičení 4: Boolean Information Retrieval – Invertovaný index a dotazy – 7 bodů
+
+V této úloze si vyzkoušíte základní principy booleovského vyhledávání v textových datech. Vytvoříte invertovaný index s
+normalizací tokenů, naparsujete a vyhodnotíte dotazy se závorkami a různými logickými operátory. Následně rozšíříte svůj
+systém o kompaktní reprezentaci indexu a analyzujete jeho efektivitu. Úloha je určena pro hlubší pochopení principů
+klasického IR modelu. Při řešení této úlohy můžete používat umělou inteligenci v libovolném rozsahu.
+
+### Ke studiu
+
+- [Introduction to Information
+  Retrieval – Chapter 1, pages 7-9.](https://nlp.stanford.edu/IR-book/pdf/irbookonlinereading.pdf)
+
+## Úkoly
+
+### Invertovaný index s normalizací – 1 bod
+
+**Úkol:**
+
+- Vytvořte textový korpus (alespoň 50 dokumentů) a vytvořte invertovaný index.
+- Při tvorbě indexu odstraňte stop slova.
+- Index by měl uchovávat také četnost výskytu každého slova v jednotlivých dokumentech.
+
+**Cíl:**  
+Seznámit se s reprezentací textového korpusu pomocí invertovaného indexu a předzpracováním textu.
+
+### Parsování a vyhodnocení složitých boolean dotazů – 2 body
+
+**Úkol:**
+
+- Implementujte zpracování boolean dotazů včetně operátorů `AND`, `OR`, `NOT`.
+- Vyhodnocení proveďte jako množinové operace nad invertovaným indexem.
+
+**Cíl:**  
+Naučit se správně parsovat složitější logické dotazy a efektivně je vyhodnocovat.
+
+### Efektivita a velikost indexu – 1 bod
+
+**Úkol:**
+
+- Analyzujte velikost vytvořeného indexu: kolik obsahuje tokenů, průměrná délka seznamů, celkový počet záznamů.
+
+**Cíl:**  
+Uvědomit si nároky invertovaného indexu.
+
+### Rozhraní pro dotazování a srovnání dotazů – 1 bod
+
+**Úkol:**
+
+- Vytvořte jednoduché rozhraní (např. konzolové nebo skriptové), které umožní zadání libovolného dotazu a zobrazení
+  výsledků.
+- Zobrazte alespoň ID dokumentů nebo první větu z každého nalezeného dokumentu.
+
+**Cíl:**  
+Usnadnit práci s vyhledávačem a demonstrovat dopad různých dotazů na výstup.
+
+### Rozšířený boolean model s váhováním – 2 body
+
+**Úkol:**
+
+- Navrhněte a implementujte jednoduchý rozšířený boolean model, který umožňuje přiřazení skóre dokumentům.
+- Na vstupu je dotaz, na výstupu seřazený seznam dokumentů podle skóre relevance.
+- Porovnejte kvalitu výsledků oproti čistému boolean přístupu.
+
+**Cíl:**  
+Seznámit se s principem váženého boolean modelu a úvodem do relevance ranking.
