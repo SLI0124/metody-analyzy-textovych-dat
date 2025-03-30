@@ -1,3 +1,5 @@
 tabulate
 matplotlib
 numpy
+pandas
+nltk
