@@ -197,6 +197,23 @@ def search(query, inverted_index, documents):
     return result_docs
 
 
+def query_interface(inverted_index, documents):
+    print("Possible operators: AND, OR, NOT, ( )")
+    print("Example query: 'market AND (economy OR business) AND NOT crisis'")
+    print("To exit, type " + '\033[94mquit\033[0m' + " or " + '\033[94mexit\033[0m')
+    
+    while True:
+        query = input("\n\033[94mEnter a query: \033[0m\n")
+        if query.lower() == 'quit' or query.lower() == 'exit':
+            break
+
+        try:
+            results = search(query, inverted_index, documents)
+            display_results(results, documents)
+        except ValueError as e:
+            print(f"\033[91mError: {e}\033[0m")
+
+
 def main():
     df = pd.read_csv("../input/task4/bbc-news-data.csv", sep='\t')
     # columns: category, filename, title, content
@@ -248,6 +265,9 @@ def main():
             display_results(results, documents, max_results=3)
         except ValueError as e:
             print(f"\033[91mError: {e}\033[0m")
+
+    print("\n\033[91m=== Task four ===\033[0m")
+    query_interface(inverted_index, documents)
 
 
 if __name__ == "__main__":
