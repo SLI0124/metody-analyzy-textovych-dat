@@ -250,6 +250,7 @@ def display_extended_results(results, documents, max_results=10):
 
 
 def main():
+    # link to the dataset: https://www.kaggle.com/datasets/hgultekin/bbcnewsarchive
     df = pd.read_csv("../input/task4/bbc-news-data.csv", sep='\t')
     # columns: category, filename, title, content
 
