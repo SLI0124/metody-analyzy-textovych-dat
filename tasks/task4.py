@@ -201,7 +201,7 @@ def query_interface(inverted_index, documents):
     print("Possible operators: AND, OR, NOT, ( )")
     print("Example query: 'market AND (economy OR business) AND NOT crisis'")
     print("To exit, type " + '\033[94mquit\033[0m' + " or " + '\033[94mexit\033[0m')
-    
+
     while True:
         query = input("\n\033[94mEnter a query: \033[0m\n")
         if query.lower() == 'quit' or query.lower() == 'exit':
@@ -212,6 +212,41 @@ def query_interface(inverted_index, documents):
             display_results(results, documents)
         except ValueError as e:
             print(f"\033[91mError: {e}\033[0m")
+
+
+def extended_search(query, inverted_index, documents):
+    search_results = search(query, inverted_index, documents)
+    scores = {}
+
+    query_words = re.findall(r'\b\w+\b', query.lower())
+    query_words = [word for word in query_words if word not in ('and', 'or', 'not')]
+
+    for doc_id in search_results:
+        score = 0
+        for word in query_words:
+            if word in inverted_index and doc_id in inverted_index[word]:
+                score += inverted_index[word][doc_id]
+
+        scores[doc_id] = score
+
+    sorted_results = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return sorted_results
+
+
+def display_extended_results(results, documents, max_results=10):
+    if not results:
+        print("Haven´t found any documents matching the query.")
+        return
+    print(f"\033[92mFound {len(results)} documents sorted by relevance:\033[0m")
+
+    for i, (doc_id, score) in enumerate(results[:max_results]):
+        doc = documents[doc_id]
+        print(f"{i + 1}. [{doc_id}] {doc['title']} (score: {score})")
+        first_sentence = doc['content'].split('.')[0] + '.'
+        print(f"\t{first_sentence}...")
+
+    if len(results) > max_results:
+        print(f"\t and {len(results) - max_results} more documents.")
 
 
 def main():
@@ -268,6 +303,19 @@ def main():
 
     print("\n\033[91m=== Task four ===\033[0m")
     query_interface(inverted_index, documents)
+
+    print("\n\033[91m=== Task five ===\033[0m")
+    for query in test_queries:
+        print(f"\n\033[94mTesting extended query:\033[0m {query}")
+        try:
+            bool_results = search(query, inverted_index, documents)
+            if bool_results:
+                extended_results = extended_search(query, inverted_index, documents)
+                display_extended_results(extended_results, documents, max_results=3)
+            else:
+                print("\033[91m" + "Haven´t found any documents matching the query." + "\033[0m")
+        except ValueError as e:
+            print(f"\033[91mChyba: {e}\033[0m")
 
 
 if __name__ == "__main__":
