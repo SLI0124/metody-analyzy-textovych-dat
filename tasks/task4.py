@@ -316,7 +316,7 @@ def main():
             else:
                 print("\033[91m" + "Haven´t found any documents matching the query." + "\033[0m")
         except ValueError as e:
-            print(f"\033[91mChyba: {e}\033[0m")
+            print(f"\033[91mError: {e}\033[0m")
 
 
 if __name__ == "__main__":
