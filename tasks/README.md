@@ -281,3 +281,85 @@ Usnadnit práci s vyhledávačem a demonstrovat dopad různých dotazů na výst
 
 **Cíl:**  
 Seznámit se s principem váženého boolean modelu a úvodem do relevance ranking.
+
+# Cvičení 5: Vektorový model a výpočet tf-idf – 7 bodů
+
+V tomto cvičení si vyzkoušíte praktickou práci s vektorovým modelem reprezentace dokumentů. Ručně spočítáte tf-idf váhy,
+porovnáte dokumenty pomocí kosinové podobnosti a zamyslíte se nad limity této metody. Úloha je navržena tak, abyste
+porozuměli principům vážení slov a podobnosti dokumentů, nikoli jen použili hotové funkce. Při řešení této úlohy můžete
+používat umělou inteligenci pro implementaci i konzultaci návrhu, ale výstupy musí být vaším vlastním zpracováním a
+interpretací a očekává se vaše schopnost problematiku vysvětlit, nikoli pouze předložit výstup nástroje.
+
+## Předzpracování textu – 1 bod
+
+### Úkol:
+
+- Vyberte si dataset s alespoň 20 dokumenty, můžete použít např. NLTK, Gutenberg, Twitter, recenze atd.
+- Pro zadané dokumenty proveďte:
+    - převod na malá písmena,
+    - odstranění interpunkce,
+    - tokenizaci,
+    - odstranění stopslov.
+- Vytvořte si vlastní seznam stopslov (alespoň 5 výrazů).
+- Výstupem by měl být seznam termů pro každý dokument.
+
+**Cíl:** Seznámit se s manuálním předzpracováním textu a připravit jej pro vektorovou reprezentaci.
+
+## Výpočet tf a idf – 2 body
+
+### Úkol:
+
+- Spočítejte term frequency (tf) každého slova *t* ve všech dokumentech.
+    - Použijte nějakou formu normování četnosti (relativní četnost) nebo zdůvodněte použití nenormované verze.
+- Spočítejte inverse document frequency (idf) s využitím vzorce:
+
+  $$  idf(t) = \log \left(\frac{N}{df(t)}\right)  $$
+
+- Spočítejte tf-idf váhy:
+
+  $$  tf\text{-}idf(t,d) = tf(t,d) \times idf(t)  $$
+
+- Spočítejte skóre pro termy v dotazu *q*:
+
+  $$  Score(q,d) = \sum_{t \in q} tf\text{-}idf(t,d)  $$
+
+- Vraťte dokumenty setříděné podle skóre.
+
+**Cíl:** Porozumět výpočtu jednotlivých komponent tf-idf a jejich významu v kontextu textového korpusu.
+
+## Výpočet tf-idf a kosinová podobnost – 2 body
+
+### Úkol:
+
+- Spočítejte kosinovou podobnost mezi všemi dvojicemi dokumentů.
+- Určete, které dva dokumenty jsou si nejpodobnější, a interpretujte proč.
+- Jak by se výsledky změnily, kdyby se použilo jen tf bez idf?
+
+**Cíl:** Prakticky aplikovat vektorový model a pochopit princip výpočtu podobnosti dokumentů.
+
+---
+
+## Význam idf v různých doménách – 1 bod (úvaha)
+
+### Úkol:
+
+- Uveďte příklad oblasti nebo tématu, kde by častá slova mohla být navzdory vysoké frekvenci velmi důležitá.
+- Vysvětlete, proč v takovém případě může být použití klasického idf nevhodné.
+- Navrhněte úpravu výpočtu, která by tento problém zmírnila.
+
+**Cíl:** Kriticky zhodnotit omezení vektorového modelu a navrhnout jeho úpravy pro konkrétní situace.
+
+---
+
+## Návrh alternativního váhovacího schématu – 1 bod (úvaha)
+
+### Úkol:
+
+- Navrhněte váhovací schéma pro krátké texty (např. tweety), které by lépe zachytilo význam slov než klasické tf-idf.
+- Popište, jak by vaše schéma vážilo slova:
+    - velmi častá napříč korpusem,
+    - vyskytující se pouze jednou,
+    - vyskytující se v části dokumentů.
+
+**Cíl:** Podpořit kreativní přístup k návrhu vlastních modelů a pochopení významu jednotlivých komponent vážení.
+
