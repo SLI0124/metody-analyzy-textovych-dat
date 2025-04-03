@@ -171,6 +171,58 @@ def plot_similarity_matrix(similarity_matrix, file_ids, most_similar=None):
     plt.close()
 
 
+def plot_common_terms(tf_idf_docs, doc1_idx, doc2_idx, file_ids, common_terms):
+    doc1_name = file_ids[doc1_idx]
+    doc2_name = file_ids[doc2_idx]
+
+    common_terms_values = []
+    for term in common_terms:
+        value1 = tf_idf_docs[doc1_idx].get(term, 0)
+        value2 = tf_idf_docs[doc2_idx].get(term, 0)
+        common_terms_values.append((term, value1, value2))
+
+    common_terms_values.sort(key=lambda x: x[1] + x[2], reverse=True)
+    top_terms = common_terms_values[:10]
+
+    terms = [item[0] for item in top_terms]
+    values1 = [item[1] for item in top_terms]
+    values2 = [item[2] for item in top_terms]
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    x = np.arange(len(terms))
+    width = 0.35
+
+    rects1 = ax.bar(x - width / 2, values1, width, label=doc1_name, color='skyblue')
+    rects2 = ax.bar(x + width / 2, values2, width, label=doc2_name, color='salmon')
+
+    ax.set_ylabel('tf-idf value')
+    ax.set_title('Significant common terms between the most similar documents')
+    ax.set_xticks(x)
+    ax.set_xticklabels(terms, rotation=45, ha='right')
+    ax.legend()
+
+    def autolabel(rects):
+        for rect in rects:
+            height = rect.get_height()
+            ax.annotate(f'{height:.3f}',
+                        xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xytext=(0, 3),
+                        textcoords="offset points",
+                        ha='center', va='bottom', fontsize=8)
+
+    autolabel(rects1)
+    autolabel(rects2)
+
+    plt.tight_layout()
+
+    save_path = "../output/task5/"
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    plt.savefig(os.path.join(save_path, 'common_terms_comparison.png'), dpi=300)
+    plt.close()
+
+
 def main():
     try:
         nltk.data.find('corpora/inaugural')
@@ -242,6 +294,7 @@ def main():
         print(f"\t• {term}")
 
     plot_similarity_matrix(similarity_matrix, file_ids, most_similar)
+    plot_common_terms(tf_idf_docs, i, j, file_ids, common_terms)
 
 
 if __name__ == '__main__':
