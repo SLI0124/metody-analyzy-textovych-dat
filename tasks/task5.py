@@ -1,6 +1,9 @@
+import os
 import random
 import math
 
+import numpy as np
+import matplotlib.pyplot as plt
 from tabulate import tabulate
 import nltk
 import string
@@ -97,6 +100,77 @@ def search_documents(query_tokens, tf_idf_docs, file_ids):
     return sorted(scores, key=lambda x: x[1], reverse=True)
 
 
+def cosine_similarity(doc1, doc2):
+    all_terms = []
+    for key in doc1:
+        if key not in all_terms:
+            all_terms.append(key)
+    for key in doc2:
+        if key not in all_terms:
+            all_terms.append(key)
+
+    dot_product = 0
+    for term in all_terms:
+        dot_product += doc1.get(term, 0) * doc2.get(term, 0)
+
+    norm1 = 0
+    for value in doc1.values():
+        norm1 += value * value
+    norm1 = np.sqrt(norm1)
+
+    norm2 = 0
+    for value in doc2.values():
+        norm2 += value * value
+    norm2 = np.sqrt(norm2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0
+
+    return dot_product / (norm1 * norm2)
+
+
+def compute_document_similarities(tf_idf_docs):
+    n_docs = len(tf_idf_docs)
+    sim_matrix = np.zeros((n_docs, n_docs))
+
+    most_similar = (0, 0, 0)
+
+    for i in range(n_docs):
+        for j in range(n_docs):
+            sim = cosine_similarity(tf_idf_docs[i], tf_idf_docs[j])
+            sim_matrix[i, j] = sim
+
+            if i != j and sim > most_similar[2]:
+                most_similar = (i, j, sim)
+
+    return sim_matrix, most_similar
+
+
+def plot_similarity_matrix(similarity_matrix, file_ids, most_similar=None):
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(similarity_matrix, cmap='Blues', vmin=0, vmax=1)
+    plt.colorbar(im, label='Cosine Similarity')
+
+    if most_similar:
+        i, j, _ = most_similar
+        plt.plot(j, i, 'x', markersize=10, markeredgewidth=2)
+
+    labels = [fid.split('-')[0] for fid in file_ids]
+
+    step = max(1, len(file_ids) // 10)
+    plt.xticks(range(0, len(file_ids), step), [labels[i] for i in range(0, len(file_ids), step)], rotation=90)
+    plt.yticks(range(0, len(file_ids), step), [labels[i] for i in range(0, len(file_ids), step)])
+
+    save_path = "../output/task5/"
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    plt.title('Cosine Similarity Matrix of Documents')
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_path, 'document_similarity.png'), dpi=300)
+    plt.close()
+
+
 def main():
     try:
         nltk.data.find('corpora/inaugural')
@@ -147,6 +221,27 @@ def main():
             )[:3]
             rep_terms_str = ", ".join([f"{term}" for term, _ in representative_terms])
             print(f"\tRepresentative terms: {rep_terms_str}")
+
+    print("\n\033[91m=== Task three ===\033[0m")
+    similarity_matrix, most_similar = compute_document_similarities(tf_idf_docs)
+    i, j, sim = most_similar
+
+    print(f"\nMost similar documents:")
+    print(f"\t1. \033[92m{file_ids[i]}\033[0m")
+    print(f"\t2. \033[92m{file_ids[j]}\033[0m")
+    print(f"\tCosine similarity: \033[94m{sim:.4f}\033[0m")
+
+    common_terms = set(tf_idf_docs[i]).intersection(tf_idf_docs[j])
+    combined_scores = {}
+    for term in common_terms:
+        combined_scores[term] = tf_idf_docs[i][term] + tf_idf_docs[j][term]
+    important_common_terms = sorted(combined_scores.items(), key=lambda item: item[1], reverse=True)[:5]
+
+    print("\nSignificant common terms:")
+    for term, _ in important_common_terms:
+        print(f"\t• {term}")
+
+    plot_similarity_matrix(similarity_matrix, file_ids, most_similar)
 
 
 if __name__ == '__main__':
