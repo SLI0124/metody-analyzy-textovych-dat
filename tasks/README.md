@@ -294,7 +294,8 @@ interpretací a očekává se vaše schopnost problematiku vysvětlit, nikoli po
 
 ### Úkol:
 
-- Vyberte si dataset s alespoň 20 dokumenty, můžete použít např. NLTK, Gutenberg, Twitter, recenze atd.
+- Vyberte si dataset s alespoň 20 dokumenty, můžete použít např. [NLTK](https://www.nltk.org/nltk_data/), Gutenberg,
+  Twitter, recenze atd.
 - Pro zadané dokumenty proveďte:
     - převod na malá písmena,
     - odstranění interpunkce,
