@@ -18,9 +18,9 @@ def preprocess_documents(documents, custom_stopwords=None):
         nltk.download('stopwords')
 
     try:
-        nltk.data.find('tokenizers/punkt')
+        nltk.data.find('tokenizers/punkt_tab')
     except LookupError:
-        nltk.download('punkt')
+        nltk.download('punkt_tab')
 
     stop_words = set(stopwords.words('english'))
     stop_words.update(custom_stopwords)
