@@ -363,3 +363,58 @@ interpretací a očekává se vaše schopnost problematiku vysvětlit, nikoli po
 
 **Cíl:** Podpořit kreativní přístup k návrhu vlastních modelů a pochopení významu jednotlivých komponent vážení.
 
+## Cvičení 6: Komprese invertovaného indexu – 5 bodů
+
+V tomto cvičení si vyzkoušíte různé metody bezztrátové komprese seznamu dokumentových identifikátorů (docIDs) v
+invertovaném indexu. Zaměříte se na jejich implementaci, experimentální vyhodnocení kompresního poměru i vlivu na
+rychlost vyhledávání. Úloha vás provede základními technikami komprese pomocí kódování rozdílů a univerzálních kódů.
+
+### Implementace kompresních algoritmů – 3 body
+
+**Úkol:**
+
+- Implementujte kompresi i dekompresi tří univerzálních kódů:
+    - **Unární kódování/dekódování** (1 bod)  
+      Vysvětlete a naimplementujte.
+    - **Eliasovo gamma kódování/dekódování** (1 bod)  
+      Vysvětlete a naimplementujte.
+    - **Fibonacciho kódování/dekódování** (1 bod)  
+      Vysvětlete a naimplementujte.
+- Kódová slova reprezentujte v textové podobě, není nutné je ukládat binárně.
+
+**Cíl:**  
+Pochopit princip univerzálního kódování a vytvořit funkční implementaci pro experimenty.
+
+---
+
+### Simulace dat a kódování – 1 bod
+
+**Úkol:**
+
+- Vygenerujte slovník s 1000 náhodnými slovy a předpokládejte kolekci s 10 000 dokumenty.
+- Vytvořte milion náhodných unikátních dvojic *(slovo, docID)* a sestavte invertovaný seznam docIDs pro každé slovo.
+- Seznam docIDs pro každé slovo seřaďte a zakódujte jako sekvenci rozdílů mezi po sobě jdoucími hodnotami, zvlášť pro
+  každý ze tří kódovacích algoritmů.
+
+**Cíl:**  
+Ověřit funkčnost komprese na synteticky vytvořených datech a připravit podklady pro srovnání velikostí.
+
+---
+
+### Srovnání velikostí a rychlosti – 1 bod
+
+**Úkol:**
+
+- Porovnejte velikost zakódovaného seznamu se seznamem nezakódovaným (např. jako seznam čísel v textové podobě).
+- Otestujte vyhledávání konkrétního docID ve všech variantách a určete rozdíl v době běhu (např. pomocí časové funkce).
+
+**Cíl:**  
+Kvantitativně zhodnotit přínos i cenu komprese z pohledu velikosti a výkonu.
+
+---
+
+### Doporučené zdroje:
+
+- [Prezentace ACS – slide kódování s proměnlivým počtem bytů](https://homel.vsb.cz/~vas218/pdf/acs/lecture3-ext.pdf)
+- [Introduction to Information Retrieval – Kapitola 5, str. 96–98](https://nlp.stanford.edu/IR-book/pdf/irbookonlinereading.pdf)
+- [Článek: Porovnání různých prefixových kódů](https://pdfs.semanticscholar.org/add5/81f36e848c47c4a1d7a0d1b72acc0ced7420.pdf)
