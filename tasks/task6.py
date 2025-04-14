@@ -18,6 +18,89 @@ def unary_decode(code):
     raise ValueError("Invalid unary code")
 
 
+def elias_gamma_encode(n):
+    """
+    Encodes n in Elias gamma encoding. Examples: 1→'0', 2→'10', 3→'110', 4→'1100'
+    1. Find the largest k such that 2^k <= n
+    2. Write k zeros followed by a 1
+    3. Write the binary representation of n - 2^k padded with zeros to k bits
+    """
+    if n == 1:
+        return '0'
+
+    # Find the largest k where 2^k <= n
+    k = 0
+    power_of_two = 1
+    while power_of_two * 2 <= n:
+        k += 1
+        power_of_two *= 2
+
+    # Make the prefix - k zeros followed by one 1
+    prefix = '0' * k + '1'
+
+    # Calculate the remainder and convert to binary
+    remainder = n - power_of_two
+
+    # Convert to binary with padding
+    if remainder == 0:
+        suffix = '0' * k
+    else:
+        # Convert to binary
+        suffix = bin(remainder)[2:]  # Remove '0b' prefix
+        # Pad with leading zeros
+        suffix = suffix.zfill(k)
+
+    return prefix + suffix
+
+
+def elias_gamma_decode(code):
+    """
+    Decodes an Elias gamma encoded string back to an integer.
+    1. Find the position of the first '1' in the code
+    2. The number of leading zeros gives k
+    3. The next k bits give the binary representation of n - 2^k
+    """
+    if code == '0':
+        return 1
+
+    # Count leading zeros to find k
+    k = 0
+    for character in code:
+        if character == '0':
+            k = k + 1
+        else:  # When we find a '1'
+            break
+
+    # Special case: if the first character is '1', then k=0
+    if k == 0:
+        return 1
+
+    # Calculate the value of 2^k
+    power_of_two = 1
+    for _ in range(k):
+        power_of_two = power_of_two * 2
+
+    # Extract the next k bits after the first '1'
+    binary_part = ""
+    if k + 1 + k <= len(code):
+        binary_part = code[k + 1:k + 1 + k]
+
+    # Convert binary string to integer manually
+    remainder = 0
+    if binary_part:
+        place_value = 1
+        # Process binary digits from right to left
+        for digit in reversed(binary_part):
+            if digit == '1':
+                remainder = remainder + place_value
+            place_value = place_value * 2
+
+    # Calculate final number
+    n = power_of_two + remainder
+
+    return n
+
+
 def main():
     test_numero = 7
     print(f"Chosen number: \033[94m{test_numero}\033[0m")
@@ -27,6 +110,12 @@ def main():
     print(f"Unary encoding: \033[93m{unary_encoded}\033[0m")
     decoded_number = unary_decode(unary_encoded)
     print(f"Decoded number from unary: \033[93m{decoded_number}\033[0m")
+
+    print("\033[91mElias Gamma Encoding\033[0m")
+    elias_encoded = elias_gamma_encode(test_numero)
+    print(f"Elias gamma encoding: \033[93m{elias_encoded}\033[0m")
+    decoded_number = elias_gamma_decode(elias_encoded)
+    print(f"Decoded number from Elias gamma: \033[93m{decoded_number}\033[0m")
 
 
 if __name__ == "__main__":
