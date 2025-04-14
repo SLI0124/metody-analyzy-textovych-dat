@@ -101,6 +101,50 @@ def elias_gamma_decode(code):
     return n
 
 
+def fibonacci_encode(n):
+    """
+    1. Find the largest Fibonacci number <= n.
+    2. Subtract it from n and mark its position in the codeword.
+    3. Repeat until n becomes 0.
+    4. Append an additional '1' to the codeword.
+    """
+    # Generate Fibonacci sequence up to n
+    fib = [1, 2]
+    while fib[-1] <= n:
+        fib.append(fib[-1] + fib[-2])
+
+    fib.pop()  # Remove the last Fibonacci number if it exceeds n
+
+    # Encode n
+    codeword = ['0'] * len(fib)
+    for i in range(len(fib) - 1, -1, -1):
+        if fib[i] <= n:
+            n -= fib[i]
+            codeword[i] = '1'
+
+    # Append the additional '1'
+    return ''.join(codeword) + '1'
+
+
+def fibonacci_decode(code):
+    """
+    1. Use the Fibonacci sequence to calculate the value of the codeword.
+    2. Ignore the last '1' in the codeword (terminating bit).
+    """
+    # Generate Fibonacci sequence up to the length of the code
+    fib = [1, 2]
+    while len(fib) < len(code) - 1:  # Exclude the terminating '1'
+        fib.append(fib[-1] + fib[-2])
+
+    # Decode the codeword
+    n = 0
+    for i in range(len(code) - 1):  # Exclude the terminating '1'
+        if code[i] == '1':
+            n += fib[i]
+
+    return n
+
+
 def main():
     test_numero = 7
     print(f"Chosen number: \033[94m{test_numero}\033[0m")
@@ -116,6 +160,12 @@ def main():
     print(f"Elias gamma encoding: \033[93m{elias_encoded}\033[0m")
     decoded_number = elias_gamma_decode(elias_encoded)
     print(f"Decoded number from Elias gamma: \033[93m{decoded_number}\033[0m")
+
+    print("\033[91mFibonacci Encoding\033[0m")
+    fibonacci_encoded = fibonacci_encode(test_numero)
+    print(f"Fibonacci encoding: \033[93m{fibonacci_encoded}\033[0m")
+    decoded_number = fibonacci_decode(fibonacci_encoded)
+    print(f"Decoded number from Fibonacci: \033[93m{decoded_number}\033[0m")
 
 
 if __name__ == "__main__":
