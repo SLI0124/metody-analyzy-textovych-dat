@@ -2,6 +2,7 @@ import random
 import string
 import os
 import matplotlib.pyplot as plt
+import time
 
 SAVE_DIR = '../output/task6'
 
@@ -217,6 +218,56 @@ def plot_encoding_sizes(unary_size, elias_size, fibonacci_size):
     plt.savefig(plot_path)
 
 
+def calculate_unencoded_size(inverted_index):
+    total_size = 0
+    for doc_ids in inverted_index.values():
+        doc_ids_str = ''.join(map(str, doc_ids))
+        total_size += len(doc_ids_str)
+    return total_size
+
+
+def search_doc_id(encoded_index, encoding_function, doc_id):
+    for encoded_doc_ids in encoded_index.values():
+        decoded_doc_ids = []
+        current_id = 0
+        for encoded in encoded_doc_ids:
+            current_id += encoding_function(encoded)
+            decoded_doc_ids.append(current_id)
+        if doc_id in decoded_doc_ids:
+            return True
+    return False
+
+
+def measure_search_time(index, encoding_function, doc_id, is_encoded=False):
+    start_time = time.time()
+    if is_encoded:
+        search_doc_id(index, encoding_function, doc_id)
+    else:
+        for doc_ids in index.values():
+            if doc_id in doc_ids:
+                break
+    return time.time() - start_time
+
+
+def plot_search_times(unencoded_time, unary_time, elias_time, fibonacci_time):
+    times, methods = zip(*sorted(zip([unencoded_time, unary_time, elias_time, fibonacci_time],
+                                     ['Unencoded', 'Unary', 'Elias Gamma', 'Fibonacci'])))
+    plt.figure(figsize=(8, 6))
+    plt.bar(methods, times, color=['blue', 'green', 'orange', 'red'])
+    plt.title('Search Time Comparison')
+    plt.xlabel('Encoding Type')
+    plt.ylabel('Search Time (seconds)')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    plot_path = os.path.join(SAVE_DIR, 'search_times.png')
+
+    if not os.path.exists(SAVE_DIR):
+        os.makedirs(SAVE_DIR)
+
+    plt.savefig(plot_path)
+    plt.show()
+
+
 def main():
     random.seed(42)
     test_numero = 7
@@ -257,9 +308,29 @@ def main():
     elias_size = sum(len(''.join(encoded)) for encoded in elias_encoded_index.values())
     fibonacci_size = sum(len(''.join(encoded)) for encoded in fibonacci_encoded_index.values())
 
+    unencoded_size = calculate_unencoded_size(inverted_index)
+
+    print(f"Unencoded total size: \033[93m{unencoded_size} characters\033[0m")
     print(f"Unary encoding total size: \033[93m{unary_size} bits\033[0m")
     print(f"Elias gamma encoding total size: \033[93m{elias_size} bits\033[0m")
     print(f"Fibonacci encoding total size: \033[93m{fibonacci_size} bits\033[0m")
+
+    # Measure search performance
+    target_doc_id = random.randint(1, num_docs)
+    print(f"\n\033[91mSearch Performance for docID {target_doc_id}\033[0m")
+
+    unencoded_time = measure_search_time(inverted_index, None, target_doc_id)
+    unary_time = measure_search_time(unary_encoded_index, unary_decode, target_doc_id, is_encoded=True)
+    elias_time = measure_search_time(elias_encoded_index, elias_gamma_decode, target_doc_id, is_encoded=True)
+    fibonacci_time = measure_search_time(fibonacci_encoded_index, fibonacci_decode, target_doc_id, is_encoded=True)
+
+    print(f"Unencoded search time: \033[93m{unencoded_time:.6f} seconds\033[0m")
+    print(f"Unary encoded search time: \033[93m{unary_time:.6f} seconds\033[0m")
+    print(f"Elias gamma encoded search time: \033[93m{elias_time:.6f} seconds\033[0m")
+    print(f"Fibonacci encoded search time: \033[93m{fibonacci_time:.6f} seconds\033[0m")
+
+    # Plot search times
+    plot_search_times(unencoded_time, unary_time, elias_time, fibonacci_time)
 
     plot_encoding_sizes(unary_size, elias_size, fibonacci_size)
 
