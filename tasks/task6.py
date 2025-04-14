@@ -273,25 +273,25 @@ def main():
     test_numero = 7
     print(f"Chosen number: \033[94m{test_numero}\033[0m")
 
-    print("\033[91mUnary Encoding and Decoding\033[0m")
+    print("\n\033[91mUnary Encoding and Decoding\033[0m")
     unary_encoded = unary_encode(test_numero)
     print(f"Unary encoding: \033[93m{unary_encoded}\033[0m")
     decoded_number = unary_decode(unary_encoded)
     print(f"Decoded number from unary: \033[93m{decoded_number}\033[0m")
 
-    print("\033[91mElias Gamma Encoding\033[0m")
+    print("\n\033[91mElias Gamma Encoding\033[0m")
     elias_encoded = elias_gamma_encode(test_numero)
     print(f"Elias gamma encoding: \033[93m{elias_encoded}\033[0m")
     decoded_number = elias_gamma_decode(elias_encoded)
     print(f"Decoded number from Elias gamma: \033[93m{decoded_number}\033[0m")
 
-    print("\033[91mFibonacci Encoding\033[0m")
+    print("\n\033[91mFibonacci Encoding\033[0m")
     fibonacci_encoded = fibonacci_encode(test_numero)
     print(f"Fibonacci encoding: \033[93m{fibonacci_encoded}\033[0m")
     decoded_number = fibonacci_decode(fibonacci_encoded)
     print(f"Decoded number from Fibonacci: \033[93m{decoded_number}\033[0m")
 
-    print("\033[91mSimulating Data and Encoding\033[0m")
+    print("\n\033[91mSimulating Data and Encoding\033[0m")
     num_words = 1000
     num_docs = 10000
     num_pairs = 1000000
@@ -315,7 +315,6 @@ def main():
     print(f"Elias gamma encoding total size: \033[93m{elias_size} bits\033[0m")
     print(f"Fibonacci encoding total size: \033[93m{fibonacci_size} bits\033[0m")
 
-    # Measure search performance
     target_doc_id = random.randint(1, num_docs)
     print(f"\n\033[91mSearch Performance for docID {target_doc_id}\033[0m")
 
@@ -329,7 +328,6 @@ def main():
     print(f"Elias gamma encoded search time: \033[93m{elias_time:.6f} seconds\033[0m")
     print(f"Fibonacci encoded search time: \033[93m{fibonacci_time:.6f} seconds\033[0m")
 
-    # Plot search times
     plot_search_times(unencoded_time, unary_time, elias_time, fibonacci_time)
 
     plot_encoding_sizes(unary_size, elias_size, fibonacci_size)
