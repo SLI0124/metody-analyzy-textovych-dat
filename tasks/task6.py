@@ -1,3 +1,11 @@
+import random
+import string
+import os
+import matplotlib.pyplot as plt
+
+SAVE_DIR = '../output/task6'
+
+
 def unary_encode(n):
     """Encodes n in unary: 0→'0', n>0→(n-1)'1's followed by '0'. Examples: 1→'0', 2→'10', 3→'110'"""
     if n == 0:
@@ -145,7 +153,72 @@ def fibonacci_decode(code):
     return n
 
 
+def generate_random_words(num_words):
+    words = set()
+
+    while len(words) < num_words:
+        word = ''.join(random.choices(string.ascii_lowercase, k=random.randint(3, 10)))
+        words.add(word)
+    return list(words)
+
+
+def generate_random_pairs(words, num_docs, num_pairs):
+    pairs = set()
+
+    while len(pairs) < num_pairs:
+        word = random.choice(words)
+        doc_id = random.randint(1, num_docs)
+        pairs.add((word, doc_id))
+    return list(pairs)
+
+
+def build_inverted_index(pairs):
+    inverted_index = {}
+
+    for word, doc_id in pairs:
+        if word not in inverted_index:
+            inverted_index[word] = []
+        inverted_index[word].append(doc_id)
+
+    for word in inverted_index:
+        inverted_index[word].sort()
+
+    return inverted_index
+
+
+def encode_doc_ids(inverted_index, encoding_function):
+    encoded_index = {}
+    for word, doc_ids in inverted_index.items():
+        differences = [doc_ids[0]]
+        for i in range(1, len(doc_ids)):
+            differences.append(doc_ids[i] - doc_ids[i - 1])
+
+        encoded_index[word] = [encoding_function(diff) for diff in differences]
+
+    return encoded_index
+
+
+def plot_encoding_sizes(unary_size, elias_size, fibonacci_size):
+    encodings = ['Unary', 'Elias Gamma', 'Fibonacci']
+    sizes = [unary_size, elias_size, fibonacci_size]
+
+    plt.figure(figsize=(8, 6))
+    plt.bar(encodings, sizes, color=['blue', 'green', 'orange'])
+    plt.title('Comparison of Encoded Index Sizes')
+    plt.xlabel('Encoding Type')
+    plt.ylabel('Total Size (bits)')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    plot_path = os.path.join(SAVE_DIR, 'encoding_sizes.png')
+
+    if not os.path.exists(SAVE_DIR):
+        os.makedirs(SAVE_DIR)
+
+    plt.savefig(plot_path)
+
+
 def main():
+    random.seed(42)
     test_numero = 7
     print(f"Chosen number: \033[94m{test_numero}\033[0m")
 
@@ -166,6 +239,29 @@ def main():
     print(f"Fibonacci encoding: \033[93m{fibonacci_encoded}\033[0m")
     decoded_number = fibonacci_decode(fibonacci_encoded)
     print(f"Decoded number from Fibonacci: \033[93m{decoded_number}\033[0m")
+
+    print("\033[91mSimulating Data and Encoding\033[0m")
+    num_words = 1000
+    num_docs = 10000
+    num_pairs = 1000000
+
+    words = generate_random_words(num_words)
+    pairs = generate_random_pairs(words, num_docs, num_pairs)
+    inverted_index = build_inverted_index(pairs)
+
+    unary_encoded_index = encode_doc_ids(inverted_index, unary_encode)
+    elias_encoded_index = encode_doc_ids(inverted_index, elias_gamma_encode)
+    fibonacci_encoded_index = encode_doc_ids(inverted_index, fibonacci_encode)
+
+    unary_size = sum(len(''.join(encoded)) for encoded in unary_encoded_index.values())
+    elias_size = sum(len(''.join(encoded)) for encoded in elias_encoded_index.values())
+    fibonacci_size = sum(len(''.join(encoded)) for encoded in fibonacci_encoded_index.values())
+
+    print(f"Unary encoding total size: \033[93m{unary_size} bits\033[0m")
+    print(f"Elias gamma encoding total size: \033[93m{elias_size} bits\033[0m")
+    print(f"Fibonacci encoding total size: \033[93m{fibonacci_size} bits\033[0m")
+
+    plot_encoding_sizes(unary_size, elias_size, fibonacci_size)
 
 
 if __name__ == "__main__":
