@@ -315,6 +315,11 @@ def main():
     print(f"Elias gamma encoding total size: \033[93m{elias_size} bits\033[0m")
     print(f"Fibonacci encoding total size: \033[93m{fibonacci_size} bits\033[0m")
 
+    print("\n\033[91mSize Comparison to Unencoded\033[0m")
+    print(f"Unary encoding is \033[93m{(unary_size / unencoded_size) * 100:.2f}%\033[0m of the unencoded size")
+    print(f"Elias gamma encoding is \033[93m{(elias_size / unencoded_size) * 100:.2f}%\033[0m of the unencoded size")
+    print(f"Fibonacci encoding is \033[93m{(fibonacci_size / unencoded_size) * 100:.2f}%\033[0m of the unencoded size")
+
     target_doc_id = random.randint(1, num_docs)
     print(f"\n\033[91mSearch Performance for docID {target_doc_id}\033[0m")
 
@@ -327,6 +332,14 @@ def main():
     print(f"Unary encoded search time: \033[93m{unary_time:.6f} seconds\033[0m")
     print(f"Elias gamma encoded search time: \033[93m{elias_time:.6f} seconds\033[0m")
     print(f"Fibonacci encoded search time: \033[93m{fibonacci_time:.6f} seconds\033[0m")
+
+    print("\n\033[91mSearch Time Comparison to Unencoded\033[0m")
+    print(f"Unary search time is \033[93m{(unary_time / unencoded_time) * 100:.2f}%\033[0m "
+          f"of the unencoded search time")
+    print(f"Elias gamma search time is \033[93m{(elias_time / unencoded_time) * 100:.2f}%\033[0m "
+          f"of the unencoded search time")
+    print(f"Fibonacci search time is \033[93m{(fibonacci_time / unencoded_time) * 100:.2f}%\033[0m "
+          f"of the unencoded search time")
 
     plot_search_times(unencoded_time, unary_time, elias_time, fibonacci_time)
 
