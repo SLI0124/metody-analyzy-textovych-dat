@@ -219,17 +219,14 @@ def plot_encoding_sizes(unary_size, elias_size, fibonacci_size):
 
 
 def calculate_unencoded_size(inverted_index):
-    """
-    Calculate the size of the unencoded inverted index as a list of numbers in text form.
-    """
-    return sum(len(''.join(map(str, doc_ids))) for doc_ids in inverted_index.values())
+    total_size = 0
+    for doc_ids in inverted_index.values():
+        doc_ids_str = ''.join(map(str, doc_ids))
+        total_size += len(doc_ids_str)
+    return total_size
 
 
 def search_doc_id(encoded_index, encoding_function, doc_id):
-    """
-    Search for a specific docID in an encoded index.
-    Decode the encoded docIDs and check if the target docID exists.
-    """
     for encoded_doc_ids in encoded_index.values():
         decoded_doc_ids = []
         current_id = 0
@@ -242,10 +239,6 @@ def search_doc_id(encoded_index, encoding_function, doc_id):
 
 
 def measure_search_time(index, encoding_function, doc_id, is_encoded=False):
-    """
-    Measure the time taken to search for a docID in the index.
-    If the index is encoded, decode it during the search.
-    """
     start_time = time.time()
     if is_encoded:
         search_doc_id(index, encoding_function, doc_id)
@@ -257,12 +250,8 @@ def measure_search_time(index, encoding_function, doc_id, is_encoded=False):
 
 
 def plot_search_times(unencoded_time, unary_time, elias_time, fibonacci_time):
-    """
-    Plot the search times for unencoded and encoded indices.
-    """
-    methods = ['Unencoded', 'Unary', 'Elias Gamma', 'Fibonacci']
-    times = [unencoded_time, unary_time, elias_time, fibonacci_time]
-
+    times, methods = zip(*sorted(zip([unencoded_time, unary_time, elias_time, fibonacci_time],
+                                     ['Unencoded', 'Unary', 'Elias Gamma', 'Fibonacci'])))
     plt.figure(figsize=(8, 6))
     plt.bar(methods, times, color=['blue', 'green', 'orange', 'red'])
     plt.title('Search Time Comparison')
@@ -284,25 +273,25 @@ def main():
     test_numero = 7
     print(f"Chosen number: \033[94m{test_numero}\033[0m")
 
-    print("\033[91mUnary Encoding and Decoding\033[0m")
+    print("\n\033[91mUnary Encoding and Decoding\033[0m")
     unary_encoded = unary_encode(test_numero)
     print(f"Unary encoding: \033[93m{unary_encoded}\033[0m")
     decoded_number = unary_decode(unary_encoded)
     print(f"Decoded number from unary: \033[93m{decoded_number}\033[0m")
 
-    print("\033[91mElias Gamma Encoding\033[0m")
+    print("\n\033[91mElias Gamma Encoding\033[0m")
     elias_encoded = elias_gamma_encode(test_numero)
     print(f"Elias gamma encoding: \033[93m{elias_encoded}\033[0m")
     decoded_number = elias_gamma_decode(elias_encoded)
     print(f"Decoded number from Elias gamma: \033[93m{decoded_number}\033[0m")
 
-    print("\033[91mFibonacci Encoding\033[0m")
+    print("\n\033[91mFibonacci Encoding\033[0m")
     fibonacci_encoded = fibonacci_encode(test_numero)
     print(f"Fibonacci encoding: \033[93m{fibonacci_encoded}\033[0m")
     decoded_number = fibonacci_decode(fibonacci_encoded)
     print(f"Decoded number from Fibonacci: \033[93m{decoded_number}\033[0m")
 
-    print("\033[91mSimulating Data and Encoding\033[0m")
+    print("\n\033[91mSimulating Data and Encoding\033[0m")
     num_words = 1000
     num_docs = 10000
     num_pairs = 1000000
@@ -319,7 +308,6 @@ def main():
     elias_size = sum(len(''.join(encoded)) for encoded in elias_encoded_index.values())
     fibonacci_size = sum(len(''.join(encoded)) for encoded in fibonacci_encoded_index.values())
 
-    # Calculate unencoded size
     unencoded_size = calculate_unencoded_size(inverted_index)
 
     print(f"Unencoded total size: \033[93m{unencoded_size} characters\033[0m")
@@ -327,7 +315,6 @@ def main():
     print(f"Elias gamma encoding total size: \033[93m{elias_size} bits\033[0m")
     print(f"Fibonacci encoding total size: \033[93m{fibonacci_size} bits\033[0m")
 
-    # Measure search performance
     target_doc_id = random.randint(1, num_docs)
     print(f"\n\033[91mSearch Performance for docID {target_doc_id}\033[0m")
 
@@ -341,7 +328,6 @@ def main():
     print(f"Elias gamma encoded search time: \033[93m{elias_time:.6f} seconds\033[0m")
     print(f"Fibonacci encoded search time: \033[93m{fibonacci_time:.6f} seconds\033[0m")
 
-    # Plot search times
     plot_search_times(unencoded_time, unary_time, elias_time, fibonacci_time)
 
     plot_encoding_sizes(unary_size, elias_size, fibonacci_size)
