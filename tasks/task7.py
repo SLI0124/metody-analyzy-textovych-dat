@@ -8,6 +8,7 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
 import time
+import matplotlib.pyplot as plt
 
 
 def download_file(url, file_path):
@@ -85,7 +86,6 @@ def process_file_chunk(file_path, start_pos, end_pos, dim=300):
                 break
 
             values = line.strip().split(' ')
-
             word = values[0]
             vector = np.array([float(val) for val in values[1:]])
             chunk_embeddings[word] = vector
@@ -145,6 +145,24 @@ def load_word_pairs(dict_file):
     return word_pairs
 
 
+def create_embedding_matrices(word_pairs, source_embeddings, target_embeddings):
+    source_vectors = []
+    target_vectors = []
+    matched_pairs = []
+
+    for source_word, target_word in tqdm(word_pairs, desc="Vytváření matic embedů"):
+        if source_word in source_embeddings and target_word in target_embeddings:
+            source_vectors.append(source_embeddings[source_word])
+            target_vectors.append(target_embeddings[target_word])
+            matched_pairs.append((source_word, target_word))
+
+    source_matrix = np.array(source_vectors)
+    target_matrix = np.array(target_vectors)
+
+    print(f"Vytvořeny matice embedů s {len(matched_pairs)} páry slov.")
+    return source_matrix, target_matrix, matched_pairs
+
+
 def main():
     # 1. Stažení a příprava dat
     cs_emb_path, en_emb_path, train_dict_path, test_dict_path = download_resources()
@@ -155,6 +173,23 @@ def main():
 
     train_pairs = load_word_pairs(train_dict_path)
     test_pairs = load_word_pairs(test_dict_path)
+
+    # 3. Vytvoření matic X (zdrojový jazyk) a Y (cílový jazyk) pro trénovací část
+    X_train, Y_train, valid_train_pairs = create_embedding_matrices(
+        train_pairs, cs_embeddings, en_embeddings
+    )
+
+    # 4. Vytvoření matic X_test a Y_test pro testovací část
+    X_test, Y_test, valid_test_pairs = create_embedding_matrices(
+        test_pairs, cs_embeddings, en_embeddings
+    )
+
+    print(f"Matice X_train tvar: {X_train.shape}")
+    print(f"Matice Y_train tvar: {Y_train.shape}")
+    print(f"Matice X_test tvar: {X_test.shape}")
+    print(f"Matice Y_test tvar: {Y_test.shape}")
+    print(f"Počet platných trénovacích párů: {len(valid_train_pairs)}")
+    print(f"Počet platných testovacích párů: {len(valid_test_pairs)}")
 
 
 if __name__ == "__main__":
