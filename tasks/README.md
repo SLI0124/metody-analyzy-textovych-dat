@@ -416,3 +416,60 @@ Kvantitativně zhodnotit přínos i cenu komprese z pohledu velikosti a výkonu.
 - [Prezentace ACS – slide kódování s proměnlivým počtem bytů](https://homel.vsb.cz/~vas218/pdf/acs/lecture3-ext.pdf)
 - [Introduction to Information Retrieval – Kapitola 5, str. 96–98](https://nlp.stanford.edu/IR-book/pdf/irbookonlinereading.pdf)
 - [Článek: Porovnání různých prefixových kódů](https://pdfs.semanticscholar.org/add5/81f36e848c47c4a1d7a0d1b72acc0ced7420.pdf)
+
+# Cvičení 7: Překlad slov pomocí vektorových reprezentací – 9 bodů
+
+V tomto cvičení si vyzkoušíte přenos významu mezi jazyky pomocí word embeddingů a lineární transformace. Nejprve získáte
+dvojjazyčná data (vektorové reprezentace a překladové dvojice), následně implementujete metodu pro učení transformační
+matice pomocí gradient descent a nakonec ověříte kvalitu překladu pomocí přesnosti. Cvičení spojuje praktické
+programování s pochopením matematického základu.
+
+## Příprava dat – 2 body
+
+**Vstupní otázka:** Co to je embedding?
+
+**Úkol:**
+
+- Stáhněte si dva embeddingy z webu [FastText](https://fasttext.cc/docs/en/crawl-vectors.html) (např. čeština a
+  angličtina), v textovém formátu `.vec`.
+- Stáhněte si překladové dvojice z
+  projektu [MUSE – bilingual dictionaries](https://github.com/facebookresearch/MUSE#ground-truth-bilingual-dictionaries),
+  konkrétně soubory `cs-en train` a   `cs-en test`.
+- Načtěte embeddingy a vytvořte matice **X** (zdrojový jazyk) a **Y** (cílový jazyk) pro trénovací a testovací část.
+
+**Cíl:** Získat konzistentní embeddingy a překladové páry pro experimenty bez nutnosti vytvářet vlastní slovník.
+
+## Implementace trénovacího algoritmu – 5 bodů
+
+**Vstupní otázka:** Co dělá gradient descent?
+
+**Úkol:**
+
+- Implementujte funkci pro výpočet Frobeniovy normy: $\|XW^\top - Y\|_F^2$ *(1 bod)*
+- Vypočítejte výraz $XW^\top - Y$ *(0.5 bodu)*
+- Odvoďte gradient ztrátové funkce vůči matici $W^\top$ *(1 bod)*
+- Implementujte gradient ztrátové funkce vůči matici $W^\top$ *(1 bod)*
+- Implementujte gradient descent s parametrem `alpha` (učící koeficient) *(1 bod)*
+- Vytvořte učení ve smyčce: pevný počet kroků a zároveň konvergence (např. musí dojít k poklesu loss funkce v posledních
+  deseti iteracích) *(0.5 bodu)*
+
+**Cíl:** Pochopit a implementovat trénovací proces pro učení lineární transformace mezi jazyky.
+
+## Překlad a vyhodnocení – 2 body
+
+**Vstupní otázka:** Jak bychom museli změnit matice X a Y, pokud bychom použili matici W místo $W^\top$?
+
+**Úkol:**
+
+- Na základě naučené matice **W** implementujte funkci, která přeloží zadané slovo – výstupem bude 5 nejpodobnějších
+  slov v cílovém jazyce dle kosinové podobnosti *(1 bod)*
+- Otestujte přesnost na testovacích slovech a spočítejte přesnost překladu (accuracy - top 1, případně accuracy - top 5)
+  *(1 bod)*
+
+**Cíl:** Ověřit, že naučená transformace umožňuje smysluplný překlad mezi jazyky.
+
+## Doporučené zdroje
+
+- [Prezentace - překlady](https://homel.vsb.cz/~vas218/docs/matd/translation.pdf)
+- [FastText – předtrénované modely](https://fasttext.cc/docs/en/crawl-vectors.html)
+- [MUSE – dvojjazyčné slovníky](https://github.com/facebookresearch/MUSE#ground-truth-bilingual-dictionaries)
