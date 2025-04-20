@@ -338,8 +338,6 @@ interpretací a očekává se vaše schopnost problematiku vysvětlit, nikoli po
 
 **Cíl:** Prakticky aplikovat vektorový model a pochopit princip výpočtu podobnosti dokumentů.
 
----
-
 ## Význam idf v různých doménách – 1 bod (úvaha)
 
 ### Úkol:
@@ -349,8 +347,6 @@ interpretací a očekává se vaše schopnost problematiku vysvětlit, nikoli po
 - Navrhněte úpravu výpočtu, která by tento problém zmírnila.
 
 **Cíl:** Kriticky zhodnotit omezení vektorového modelu a navrhnout jeho úpravy pro konkrétní situace.
-
----
 
 ## Návrh alternativního váhovacího schématu – 1 bod (úvaha)
 
@@ -365,6 +361,13 @@ interpretací a očekává se vaše schopnost problematiku vysvětlit, nikoli po
 **Cíl:** Podpořit kreativní přístup k návrhu vlastních modelů a pochopení významu jednotlivých komponent vážení.
 
 ## Cvičení 6: Komprese invertovaného indexu – 5 bodů
+
+(Tohle se nepovedlo, nedostal jsem body za druhou polovinu, tak na to tu upozorňuji, nepochopil jsem to, špatně jsem si
+to obhájil a šel jsem na to úplně špatně, implementaci kompresních algoritmů jsem udělal správně, ale pak jsem to špatně
+otestoval, místo genereování ASCII znaků jsem měl generovat čísla, což mi dává menší smysl, ale budiž, v zdaání jsou
+slova, ale nebudu se hádat, tím pádem ty velikosti a časy nedávají smysl, čas jsem taky testoval na jednom dokumentu,
+což je moje chyba, protože to takhle není statisticky správně, měl jsem to testovat na více dokumentech a počítat
+průměr, tím že jsem to nepochopil a už jsem (ne)dostal body, tak to tu jen tak napíšu místot toho, abych to opravoval)
 
 V tomto cvičení si vyzkoušíte různé metody bezztrátové komprese seznamu dokumentových identifikátorů (docIDs) v
 invertovaném indexu. Zaměříte se na jejich implementaci, experimentální vyhodnocení kompresního poměru i vlivu na
@@ -386,8 +389,6 @@ rychlost vyhledávání. Úloha vás provede základními technikami komprese po
 **Cíl:**  
 Pochopit princip univerzálního kódování a vytvořit funkční implementaci pro experimenty.
 
----
-
 ### Simulace dat a kódování – 1 bod
 
 **Úkol:**
@@ -400,8 +401,6 @@ Pochopit princip univerzálního kódování a vytvořit funkční implementaci 
 **Cíl:**  
 Ověřit funkčnost komprese na synteticky vytvořených datech a připravit podklady pro srovnání velikostí.
 
----
-
 ### Srovnání velikostí a rychlosti – 1 bod
 
 **Úkol:**
@@ -411,8 +410,6 @@ Ověřit funkčnost komprese na synteticky vytvořených datech a připravit pod
 
 **Cíl:**  
 Kvantitativně zhodnotit přínos i cenu komprese z pohledu velikosti a výkonu.
-
----
 
 ### Doporučené zdroje:
 
