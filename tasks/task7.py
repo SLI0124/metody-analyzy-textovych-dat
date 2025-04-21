@@ -1,12 +1,11 @@
 import numpy as np
 from tqdm import tqdm
 import os
+import random
 import requests
 import gzip
-import shutil
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from functools import partial
 import time
 import matplotlib.pyplot as plt
 
@@ -55,14 +54,16 @@ def download_resources():
 
     for emb_path in [cs_emb_path, en_emb_path]:
         if not os.path.exists(emb_path) and os.path.exists(emb_path + ".gz"):
+            print(f"Rozbaluji {emb_path}.gz...")
             with gzip.open(emb_path + ".gz", 'rb') as f_in:
                 with open(emb_path, 'wb') as f_out:
-                    shutil.copyfileobj(f_in, f_out)
+                    f_out.write(f_in.read())
+            print(f"Rozbaleno: {emb_path}")
 
     return cs_emb_path, en_emb_path, train_dict_path, test_dict_path
 
 
-def process_chunk(chunk_lines, dim=300):
+def process_chunk(chunk_lines):
     chunk_embeddings = {}
     for line in chunk_lines:
         values = line.strip().split(' ')
@@ -73,7 +74,7 @@ def process_chunk(chunk_lines, dim=300):
     return chunk_embeddings
 
 
-def process_file_chunk(file_path, start_pos, end_pos, dim=300):
+def process_file_chunk(file_path, start_pos, end_pos):
     chunk_embeddings = {}
     with open(file_path, 'r', encoding='utf-8') as f:
         f.seek(start_pos)
@@ -103,9 +104,6 @@ def load_embeddings(embedding_file):
     file_size = os.path.getsize(embedding_file)
 
     with open(embedding_file, 'r', encoding='utf-8') as f:
-        header_line = f.readline().strip()
-        header_parts = header_line.split()
-        vocab_size, dim = int(header_parts[0]), int(header_parts[1])
         header_end_pos = f.tell()
 
     chunk_size = (file_size - header_end_pos) // num_workers
@@ -116,9 +114,8 @@ def load_embeddings(embedding_file):
     word_to_vector = {}
 
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
-        process_func = partial(process_file_chunk, embedding_file, dim=dim)
         future_to_chunk = {
-            executor.submit(process_func, start, end): i
+            executor.submit(process_file_chunk, embedding_file, start, end): i
             for i, (start, end) in enumerate(zip(start_positions, end_positions))
         }
 
@@ -159,7 +156,7 @@ def create_embedding_matrices(word_pairs, source_embeddings, target_embeddings):
     source_matrix = np.array(source_vectors)
     target_matrix = np.array(target_vectors)
 
-    print(f"Vytvořeny matice embedů s {len(matched_pairs)} páry slov.")
+    print(f"\nVytvořeny matice embedů s {len(matched_pairs)} páry slov.")
     return source_matrix, target_matrix, matched_pairs
 
 
@@ -178,6 +175,7 @@ def compute_gradient(X, W_t, Y):
     """
     Výpočet gradientu ztrátové funkce vůči matici W^T
     Gradient = 2 * X^T * (XW^T - Y)
+    https://math.stackexchange.com/questions/2128462/gradient-of-squared-frobenius-norm-of-a-matrix
     """
     diff = compute_difference(X, W_t, Y)
     return 2 * np.matmul(X.T, diff)
@@ -192,14 +190,14 @@ def gradient_descent(X, Y, learning_rate=0.01, max_iterations=1000, tol=1e-6, pa
     best_W_t = None
     patience_counter = 0
 
-    print("Začátek trénování gradient descent...")
+    print("\nZačátek trénování gradient descent...")
     pbar = tqdm(range(max_iterations), desc="Gradient Descent")
     for i in pbar:
         current_loss = frobenius_norm_squared(X, W_t, Y)
         loss_history.append(current_loss)
         gradient = compute_gradient(X, W_t, Y)
 
-        W_t = W_t - learning_rate * gradient # upravíme W_t na základě gradientu 
+        W_t = W_t - learning_rate * gradient  # upravíme W_t na základě gradientu
 
         pbar.set_postfix(loss=f"{current_loss:.4f}", patience=patience_counter)
 
@@ -316,26 +314,33 @@ def main():
     print(f"Počet platných testovacích párů: {len(valid_test_pairs)}")
 
     # 5. Trénování transformační matice pomocí gradient descent
-    print("Začátek trénování transformační matice...")
+    print("\nZačátek trénování transformační matice...")
     W_t = gradient_descent(X_train, Y_train, learning_rate=0.001, max_iterations=500, patience=20)
-    print("Trénování dokončeno!")
+    print("\nTrénování dokončeno!")
 
     # 6. Vyhodnocování kvality překladu na malém vzorku dat
     print("Vyhodnocování kvality překladu...")
-    # Použijeme pouze prvních 15 párů pro rychlejší vyhodnocení
-    sample_test_pairs = valid_test_pairs[:15]
+    # Použijeme pouze náhodných 15 párů pro rychlejší vyhodnocení
+    random.seed(42)  # pro reprodukovatelnost
+    sample_test_pairs = random.sample(valid_test_pairs, min(15, len(valid_test_pairs)))
     print(f"Vyhodnocuji na vzorku {len(sample_test_pairs)} párů z celkových {len(valid_test_pairs)}")
     top1_accuracy, top5_accuracy = evaluate_translation(sample_test_pairs, cs_embeddings, en_embeddings, W_t)
     print(f"Přesnost překladu (Top-1): {top1_accuracy:.4f}")
     print(f"Přesnost překladu (Top-5): {top5_accuracy:.4f}")
 
+    # also translate those 15 pairs
+    print("\nUkázka překladu vybraných párů:")
+    for source_word, target_word in sample_test_pairs:
+        translations = translate_word(source_word, cs_embeddings, en_embeddings, W_t)
+        print(f"{source_word} -> {[t[0] for t in translations]} (Očekávaný překlad: {target_word})")
+
     # 7. Ukázka překladu několika českých slov
     print("\nUkázka překladu vybraných slov:")
-    test_words = ["pes", "kočka", "auto", "počítač", "kniha"]
+    test_words = ["pes", "kočka", "auto", "počítač", "dům"]
     for word in test_words:
         if word in cs_embeddings:
             translations = translate_word(word, cs_embeddings, en_embeddings, W_t)
-            print(f"{word} -> {[t[0] for t in translations]}")
+            print(f"{word} -> {[t[0] for t in translations]} (Očekávaný překlad: {translations[0][0]})")
 
 
 if __name__ == "__main__":
