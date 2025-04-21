@@ -34,8 +34,8 @@ def download_resources():
 
     cs_emb_url = "https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/cc.cs.300.vec.gz"
     en_emb_url = "https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/cc.en.300.vec.gz"
-    train_dict_url = "https://dl.fbaipublicfiles.com/arrival/dictionaries/cs-en.txt"
-    test_dict_url = "https://dl.fbaipublicfiles.com/arrival/dictionaries/cs-en.0-5000.txt"
+    train_dict_url = "https://dl.fbaipublicfiles.com/arrival/dictionaries/cs-en.0-5000.txt"
+    test_dict_url = "https://dl.fbaipublicfiles.com/arrival/dictionaries/cs-en.5000-6500.txt"
 
     cs_emb_path = os.path.join(input_dir, "cc.cs.300.vec")
     en_emb_path = os.path.join(input_dir, "cc.en.300.vec")
@@ -59,6 +59,11 @@ def download_resources():
                 with open(emb_path, 'wb') as f_out:
                     f_out.write(f_in.read())
             print(f"Rozbaleno: {emb_path}")
+
+    for emb_path in [cs_emb_path, en_emb_path]:
+        if os.path.exists(emb_path + ".gz"):
+            os.remove(emb_path + ".gz")
+            print(f"Smazán: {emb_path}.gz")
 
     return cs_emb_path, en_emb_path, train_dict_path, test_dict_path
 
@@ -201,7 +206,6 @@ def gradient_descent(X, Y, learning_rate=0.01, max_iterations=1000, tol=1e-6, pa
 
         pbar.set_postfix(loss=f"{current_loss:.4f}", patience=patience_counter)
 
-        # Ukládání nejlepšího modelu
         if current_loss < best_loss:
             best_loss = current_loss
             best_W_t = W_t.copy()
@@ -223,7 +227,7 @@ def gradient_descent(X, Y, learning_rate=0.01, max_iterations=1000, tol=1e-6, pa
     plt.plot(loss_history)
     plt.title('Průběh ztrátové funkce během trénování')
     plt.xlabel('Iterace')
-    plt.ylabel('Loss (Frobenius norma^2)')
+    plt.ylabel('Ztráta')
     plt.grid(True)
 
     save_dir = "../output/task7"
