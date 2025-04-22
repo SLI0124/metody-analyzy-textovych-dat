@@ -68,17 +68,6 @@ def download_resources():
     return cs_emb_path, en_emb_path, train_dict_path, test_dict_path
 
 
-def process_chunk(chunk_lines):
-    chunk_embeddings = {}
-    for line in chunk_lines:
-        values = line.strip().split(' ')
-        word = values[0]
-        vector = np.array([float(val) for val in values[1:]])
-        chunk_embeddings[word] = vector
-
-    return chunk_embeddings
-
-
 def process_file_chunk(file_path, start_pos, end_pos):
     chunk_embeddings = {}
     with open(file_path, 'r', encoding='utf-8') as f:
