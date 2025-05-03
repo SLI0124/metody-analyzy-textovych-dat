@@ -473,3 +473,143 @@ programování s pochopením matematického základu.
 - [Prezentace - překlady](https://homel.vsb.cz/~vas218/docs/matd/translation.pdf)
 - [FastText – předtrénované modely](https://fasttext.cc/docs/en/crawl-vectors.html)
 - [MUSE – dvojjazyčné slovníky](https://github.com/facebookresearch/MUSE#ground-truth-bilingual-dictionaries)
+
+# Cvičení 8: CBOW model pro češtinu – 20 nebo 30 bodů (cvičení a projekt)
+
+V tomto cvičení si vytvoříte vlastní model typu Continuous Bag of Words (CBOW) pro češtinu. Cílem je naučit model
+předpovídat slovo na základě jeho kontextu a tím získat kvalitní distribuované vektorové reprezentace slov (embeddingy).
+Úloha má dvě varianty: použití existujících knihoven (20 bodů) nebo plná implementace od nuly (30 bodů).
+
+## Příprava a zpracování dat – 5 bodů
+
+**Vstupní otázka:** Co je CBOW model a jak funguje?
+
+**Úkol:**
+
+- Stáhněte nebo použijte připravený český korpus (např. z hugginface.co nebo výřez Wikipedie).
+- Proveďte tokenizaci a vytvořte slovník (např. 10 000 nejčastějších slov).
+- Vytvořte trénovací dvojice: kontextová slova (např. 2 vlevo + 2 vpravo) → cílové slovo.
+- Slova mimo slovník označte jako <UNK>.
+
+**Cíl:** Připravit data pro trénink CBOW modelu ve formátu vhodném pro učení.
+
+## Trénování modelu – 10 bodů (varianta A) nebo 20 bodů (varianta B)
+
+**Vstupní otázka:** Co se učí CBOW model a jak se optimalizují jeho váhy?
+
+**Varianta A – použití knihovny (max. 20 bodů celkem):**
+
+- Využijte PyTorch, Keras, TensorFlow nebo jinou knihovnu s Embedding vrstvou.
+- Implementujte architekturu CBOW a trénujte model pomocí CrossEntropyLoss a optimalizátoru (SGD/Adam).
+
+**Varianta B – plná implementace (max. 30 bodů celkem):**
+
+- Inicializujte matice E, W, b pomocí např. normálního rozdělení.
+- Vypočítejte průměr embeddingů pro kontext.
+- Implementujte softmax, ztrátu (křížová entropie), výpočet gradientů a SGD update ručně (např. v NumPy).
+- Proveďte trénink přes více epoch s výpisem průběhu lossu.
+
+**Cíl:** Porozumět principu CBOW a naučit se jej implementovat a trénovat.
+
+## Vyhodnocení modelu – 5 bodů
+
+**Úkol:**
+
+- Pro vybraná slova (např. „pes", „škola", „krásný") najděte 5 nejbližších sousedů podle kosinové podobnosti.
+- Vizualizujte embedding prostor pomocí t-SNE nebo PCA.
+- Zhodnoťte, zda embeddingy zachycují významovou podobnost.
+
+**Cíl:** Ověřit kvalitu naučených embeddingů a jejich interpretaci.
+
+## Doporučené zdroje:
+
+- [Jurafsky & Martin – Speech and Language Processing (kap. 6)](https://web.stanford.edu/~jurafsky/slp3/ed3book.pdf)
+- [Datasety](https://huggingface.co/datasets?task_categories=task_categories:text-classification&language=language:cs&p=1&sort=trending)
+- [Prezentace – CBOW model (ke cvičení)](https://homel.vsb.cz/~vas218/docs/matd/cbow-prezentace.pdf)
+
+# Cvičení 9: Transformer pro sumarizaci dialogů – 21 bodů (cvičení a projekt)
+
+V tomto cvičení si vyzkoušíte implementaci modelu typu encoder-decoder založeného na architektuře Transformer pro úlohu
+sumarizace krátkých dialogů ze Samsum datasetu. Cílem je vytvořit systém, který dokáže automaticky vygenerovat souhrn
+daného dialogu.
+
+## Příprava a zpracování dat – 2 body
+
+**Odpovězte:** Jaká je struktura Samsum datasetu a proč je vhodný pro úlohu sumarizace?
+
+**Úkol:**
+
+- Stáhněte Samsum dataset (např. pomocí knihovny datasets z Hugging
+  Face). [Odkaz na HuggingFace](https://huggingface.co/datasets/Samsung/samsum)
+- Rozdělte data na trénovací (příp. také validační) a testovací množinu.
+
+**Cíl:** Připravit trénovací a testovací data vhodná pro modelování sumarizace.
+
+## Předzpracování a tokenizace – 2 body
+
+**Odpovězte:** Jak funguje tokenizace a proč je důležitá při práci s modely pro textová data?
+
+**Úkol:**
+
+- Vyberte libovolný předtrénovaný tokenizer.
+- Tokenizujte vstupní texty (dialogy) i výstupy (shrnutí).
+
+**Cíl:** Převést textová data do tokenizovaného formátu vhodného pro trénink modelu.
+
+## Implementace Transformer modelu – 6 bodů
+
+**Odpovězte:** Jak funguje encoder-decoder architektura založená na Transformeru?
+
+**Odpovězte:** Proč potřebujeme padding v encoderu a decoderu?
+
+**Úkol:**
+
+- Naimplementujte encoder-decoder model pro generování shrnutí pomocí Transformeru.
+- Můžete využít:
+    - nn.Transformer z PyTorch,
+    - nebo TransformerEncoder a TransformerDecoder vrstvy v Kerasu.
+- Přidejte token embedding a poziční encoding pro vstupní i cílové sekvence.
+- Implementujte správné maskování:
+    - Padding mask – ignorování padding tokenů,
+    - Causal mask – zákaz nahlížení na budoucí tokeny v dekodéru.
+
+**Cíl:** Postavit funkční Transformer model připravený k tréninku.
+
+## Trénování modelu – 6 body
+
+**Odpovězte:** Jak se trénuje sekvenční model na úlohu sekvence-sekvence?
+
+**Úkol:**
+
+- Definujte loss funkci (například CrossEntropyLoss pro predikci tokenů).
+- Vyberte vhodný optimalizátor (například Adam/AdamW).
+- Natrénujte model na trénovacích datech (validujte během trénování).
+
+**Cíl:** Vytrénovat model schopný generovat shrnutí.
+
+## Inference – generování shrnutí – 4 body
+
+**Odpovězte:** Jakým způsobem lze generovat výstupní sekvenci v dekodérovém Transformeru?
+
+**Nápověda:** K čemu nám jsou speciální tokeny <SOS> a <EOS>?
+
+**Úkol:**
+
+- Implementujte funkci, která na základě vstupního dialogu vygeneruje shrnutí.
+- Nastudujte si a využijte greedy decoding nebo beam search.
+
+**Cíl:** Umět z trénovaného modelu získat výstupní shrnutí.
+
+## Vyhodnocení modelu – 1 bod
+
+**Úkol:**
+
+- Vyhodnoťte kvalitu generovaných shrnutí pomocí metrik ROUGE-1 a ROUGE-2.
+- Porovnejte generovaná shrnutí s referenčními shrnutími v testovací množině.
+
+**Cíl:** Kvantitativně ověřit kvalitu modelu pro sumarizaci.
+
+## Doporučené zdroje:
+
+- [Transformer - Jurafsky, Stanford](https://web.stanford.edu/~jurafsky/slp3/10.pdf)
+
