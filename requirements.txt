@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cu128
 tabulate
 matplotlib
 numpy
@@ -5,3 +6,8 @@ pandas
 nltk
 requests
 tqdm
+torch
+torchvision
+torchaudio
+datasets
+adjustText
