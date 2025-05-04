@@ -22,38 +22,43 @@ from adjustText import adjust_text
 import random
 
 
+def download_file(url, local_path):
+    """Download a file from a URL to a local path."""
+    print(f"Stahuji soubor z {url}...")
+    response = requests.get(url, stream=True)
+    response.raise_for_status()
+
+    total_size = int(response.headers.get('content-length', 0))
+    block_size = 8192
+
+    with open(local_path, 'wb') as f:
+        with tqdm(total=total_size, unit='B', unit_scale=True, unit_divisor=1024, desc=Path(local_path).name) as pbar:
+            for chunk in response.iter_content(chunk_size=block_size):
+                f.write(chunk)
+                pbar.update(len(chunk))
+
+    print(f"Soubor stažen do {local_path}")
+
+
+def extract_gzip(gzip_path, output_path):
+    """Extract a gzip file to a specified output path."""
+    print(f"Extrahuji {gzip_path} do {output_path}...")
+    try:
+        with gzip.open(gzip_path, 'rb') as f_in:
+            with open(output_path, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        print(f"Soubor byl úspěšně extrahován do {output_path}")
+    except EOFError:
+        print("Chyba: Komprimovaný soubor je poškozený nebo neúplný. Mažu a stahuji znovu.")
+        os.remove(gzip_path)
+        raise
+
+
 def download_and_extract(url, input_dir, output_dir):
-    def download_file(url, local_path):
-        print(f"Stahuji soubor z {url}...")
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-
-        total_size = int(response.headers.get('content-length', 0))
-        block_size = 8192
-
-        with open(local_path, 'wb') as f:
-            with tqdm(total=total_size, unit='B', unit_scale=True, unit_divisor=1024, desc=Path(local_path).name) as pbar:
-                for chunk in response.iter_content(chunk_size=block_size):
-                    f.write(chunk)
-                    pbar.update(len(chunk))
-        print(f"Soubor stažen do {local_path}")
-
-    def extract_gzip(gzip_path, output_path):
-        print(f"Extrahuji {gzip_path} do {output_path}...")
-        try:
-            with gzip.open(gzip_path, 'rb') as f_in:
-                with open(output_path, 'wb') as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            print(f"Soubor byl úspěšně extrahován do {output_path}")
-        except EOFError:
-            print("Chyba: Komprimovaný soubor je poškozený nebo neúplný. Mažu a stahuji znovu.")
-            os.remove(gzip_path)
-            raise
-
+    """Download and extract a file if it doesn't already exist."""
     gzip_path = input_dir / "cs.txt.gz"
     output_path = input_dir / "cs.txt"
 
-    # Download and extract data if needed
     if not gzip_path.exists():
         download_file(url, gzip_path)
     else:
@@ -83,29 +88,44 @@ def process_chunk(chunk):
     return tokens
 
 
-def tokenize_and_build_vocab(input_path, vocab_size, max_lines):
-    def build_vocab(tokens, vocab_size):
-        counts = Counter(tokens)
-        vocab = [word for word, _ in counts.most_common(vocab_size - 1)]
-        word_to_ix = {word: i for i, word in enumerate(vocab)}
-        word_to_ix['<UNK>'] = len(vocab)
-        ix_to_word = {i: word for word, i in word_to_ix.items()}
-        return word_to_ix, ix_to_word, counts
+def build_vocab(tokens, vocab_size):
+    """Build a vocabulary from tokens."""
+    counts = Counter(tokens)
+    vocab = [word for word, _ in counts.most_common(vocab_size - 1)]
+    word_to_ix = {word: i for i, word in enumerate(vocab)}
+    word_to_ix['<UNK>'] = len(vocab)
+    ix_to_word = {i: word for word, i in word_to_ix.items()}
+    return word_to_ix, ix_to_word, counts
 
-    # Tokenize text in parallel
+
+def parallel_tokenize(lines):
+    """Tokenize text in parallel using multiprocessing."""
+    num_processes = multiprocessing.cpu_count()
+    chunk_size = max(1, len(lines) // num_processes)
+    chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
+
+    print(f"Paralelní zpracování textu pomocí {num_processes} procesů...")
+    tokens = []
+
+    with ProcessPoolExecutor(max_workers=num_processes) as executor:
+        futures = [executor.submit(process_chunk, chunk) for chunk in chunks]
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Tokenizace chunků"):
+            tokens.extend(future.result())
+
+    return tokens
+
+
+def tokenize_and_build_vocab(input_path, vocab_size, max_lines):
+    """Tokenize text and build a vocabulary."""
     print("Načítám a tokenizuji text...")
     tokens = []
+
     if input_path.exists():
         with open(input_path, 'r', encoding='utf-8') as f:
             lines = [line for i, line in enumerate(f) if i < max_lines]
-        num_processes = multiprocessing.cpu_count()
-        chunk_size = max(1, len(lines) // num_processes)
-        chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
-        print(f"Paralelní zpracování textu pomocí {num_processes} procesů...")
-        with ProcessPoolExecutor(max_workers=num_processes) as executor:
-            futures = [executor.submit(process_chunk, chunk) for chunk in chunks]
-            for future in tqdm(as_completed(futures), total=len(futures), desc="Tokenizace chunků"):
-                tokens.extend(future.result())
+
+        tokens = parallel_tokenize(lines)
+
         print(f"Celkem tokenů: {len(tokens)}")
     else:
         print("Chyba: Extrahovaný soubor nenalezen.")
@@ -115,28 +135,27 @@ def tokenize_and_build_vocab(input_path, vocab_size, max_lines):
     word_to_ix, ix_to_word, word_counts = build_vocab(tokens, vocab_size)
     actual_vocab_size = len(word_to_ix)
     print(f"Slovník vytvořen, obsahuje {actual_vocab_size} slov")
+
     return word_to_ix, ix_to_word, tokens
 
 
 def create_cbow_training_data(tokens, word_to_ix, window_size):
-    def create_cbow_data(tokens, word_to_ix, window_size):
-        data = []
-        unk_ix = word_to_ix['<UNK>']
-        token_indices = [word_to_ix.get(word, unk_ix) for word in tokens]
-
-        for i in range(window_size, len(token_indices) - window_size):
-            context_indices = (
-                    token_indices[i - window_size: i] +
-                    token_indices[i + 1: i + 1 + window_size]
-            )
-            target_index = token_indices[i]
-            data.append((context_indices, target_index))
-        return data
-
+    """Create CBOW training data from tokens."""
     print(f"Vytvářím CBOW trénovací data (window_size={window_size})...")
-    cbow_data = create_cbow_data(tokens, word_to_ix, window_size)
-    print(f"Počet trénovacích vzorků: {len(cbow_data)}")
-    return cbow_data
+    data = []
+    unk_ix = word_to_ix['<UNK>']
+    token_indices = [word_to_ix.get(word, unk_ix) for word in tokens]
+
+    for i in range(window_size, len(token_indices) - window_size):
+        context_indices = (
+            token_indices[i - window_size: i] +
+            token_indices[i + 1: i + 1 + window_size]
+        )
+        target_index = token_indices[i]
+        data.append((context_indices, target_index))
+
+    print(f"Počet trénovacích vzorků: {len(data)}")
+    return data
 
 
 class CBOW(nn.Module):
