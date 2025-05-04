@@ -15,6 +15,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+import seaborn as sns
+from adjustText import adjust_text
 
 
 def download_file(url, local_path):
@@ -223,6 +227,30 @@ def save_model(model, output_dir):
     print(f"Model uložen")
 
 
+def visualize_embeddings(embeddings, ix_to_word, output_dir, vis_embeddings_count=200):
+    sns.set_theme(style="whitegrid")
+    print("Generuji t-SNE vizualizaci embeddingů...")
+    tsne = TSNE(n_components=2, random_state=42)
+    vocab_size = embeddings.shape[0]
+    import random
+    random_indices = random.sample(range(vocab_size), min(vis_embeddings_count, vocab_size))
+    selected_embeddings = embeddings[random_indices]
+    embeddings_2d = tsne.fit_transform(selected_embeddings)
+    plt.figure(figsize=(16, 16))
+    scatter = plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], alpha=0.5)
+    texts = []
+    for i, idx in enumerate(random_indices):
+        word = ix_to_word[idx]
+        texts.append(plt.text(embeddings_2d[i, 0], embeddings_2d[i, 1], word, fontsize=8))
+    adjust_text(texts, arrowprops=dict(arrowstyle='-', color='black', lw=0.5))
+    plt.title("t-SNE vizualizace náhodně vybraných embeddingů")
+    plt.tight_layout()
+    viz_path = output_dir / "word_embeddings.png"
+    plt.savefig(viz_path, dpi=300)
+    print(f"Vizualizace uložena do {viz_path}")
+    plt.show()
+
+
 def main():
     url = "https://lindat.mff.cuni.cz/repository/xmlui/bitstream/handle/11234/1-2735/cs.txt.gz?sequence=54&isAllowed=y"
 
@@ -261,8 +289,10 @@ def main():
         embedding_dim = embeddings.shape[1] if embeddings is not None else 100
         model = load_model(output_dir, vocab_size, embedding_dim)
 
-    # If we're missing any component, we need to train or extract it
-    if model is None or word_to_ix is None or embeddings is None:
+    # If all components exist, skip processing and training
+    if model is not None and word_to_ix is not None and embeddings is not None:
+        print("Všechny komponenty již existují, přeskočeno zpracování a trénink.")
+    else:
         print("Některé komponenty chybí, zahajuji zpracování dat a trénink...")
 
         # Download and extract data if needed
@@ -271,18 +301,20 @@ def main():
         else:
             print(f"Soubor {gzip_path} již existuje, přeskakuji stahování.")
 
-        while not output_path.exists():
-            try:
-                extract_gzip(gzip_path, output_path)
-            except EOFError:
-                print("Opakuji stažení a extrakci...")
-                download_file(url, gzip_path)
-            else:
-                break
+        if not output_path.exists():
+            while not output_path.exists():
+                try:
+                    extract_gzip(gzip_path, output_path)
+                except EOFError:
+                    print("Opakuji stažení a extrakci...")
+                    download_file(url, gzip_path)
+                else:
+                    break
         else:
             print(f"Soubor {output_path} již existuje, přeskakuji extrakci.")
 
         # Tokenize text in parallel if we need vocab or embeddings
+        tokens = None
         if word_to_ix is None or embeddings is None:
             print("Načítám a tokenizuji text...")
             max_lines = 200_000
@@ -314,102 +346,87 @@ def main():
                 print("Chyba: Extrahovaný soubor nenalezen.")
                 return
 
-            # Build vocabulary if needed
-            if word_to_ix is None:
-                vocab_size = 10000
-                print(f"Vytvářím slovník (velikost {vocab_size})...")
-                word_to_ix, ix_to_word, word_counts = build_vocab(tokens, vocab_size)
-                actual_vocab_size = len(word_to_ix)
-                print(f"Slovník vytvořen, obsahuje {actual_vocab_size} slov")
+        # Build vocabulary if needed
+        if word_to_ix is None:
+            if tokens is None:
+                print("Chyba: Tokeny nejsou k dispozici pro vytvoření slovníku.")
+                return
+            vocab_size = 10000
+            print(f"Vytvářím slovník (velikost {vocab_size})...")
+            word_to_ix, ix_to_word, word_counts = build_vocab(tokens, vocab_size)
+            actual_vocab_size = len(word_to_ix)
+            print(f"Slovník vytvořen, obsahuje {actual_vocab_size} slov")
+            save_vocab(word_to_ix, output_dir)
 
-                # Save vocabulary for future use
-                save_vocab(word_to_ix, output_dir)
+        # Train the model and extract embeddings if needed
+        if model is None or embeddings is None:
+            if tokens is None:
+                print("Chyba: Tokeny nejsou k dispozici pro trénink modelu.")
+                return
+            window_size = 2
+            print(f"Vytvářím CBOW trénovací data (window_size={window_size})...")
+            cbow_data = create_cbow_data(tokens, word_to_ix, window_size)
+            print(f"Počet trénovacích vzorků: {len(cbow_data)}")
 
-            # We need to train the model if it doesn't exist or if we don't have embeddings
-            if model is None or embeddings is None:
-                # Create CBOW data
-                window_size = 2
-                print(f"Vytvářím CBOW trénovací data (window_size={window_size})...")
-                cbow_data = create_cbow_data(tokens, word_to_ix, window_size)
-                print(f"Počet trénovacích vzorků: {len(cbow_data)}")
+            if not cbow_data:
+                print("Nebyly vygenerovány žádné trénovací vzorky. Zkontrolujte text a parametry.")
+                return
 
-                if not cbow_data:
-                    print("Nebyly vygenerovány žádné trénovací vzorky. Zkontrolujte text a parametry.")
-                    return
+            embedding_dim = 100
+            learning_rate = 0.01
+            epochs = 5
+            batch_size = 128
 
-                # Model parameters
-                embedding_dim = 100
-                learning_rate = 0.01
-                epochs = 5
-                batch_size = 128
+            print("\n--- Trénování CBOW modelu ---")
+            print(
+                f"Parametry: embedding_dim={embedding_dim}, lr={learning_rate}, epochs={epochs}, batch_size={batch_size}")
 
-                print("\n--- Trénování CBOW modelu ---")
-                print(
-                    f"Parametry: embedding_dim={embedding_dim}, lr={learning_rate}, epochs={epochs}, batch_size={batch_size}")
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            print(f"Používám zařízení: {device}")
 
-                # Setup device and model
-                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                print(f"Používám zařízení: {device}")
+            vocab_size = len(word_to_ix)
+            model = CBOW(vocab_size, embedding_dim).to(device)
+            loss_function = nn.CrossEntropyLoss()
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-                vocab_size = len(word_to_ix)
-                model = CBOW(vocab_size, embedding_dim).to(device)
-                loss_function = nn.CrossEntropyLoss()
-                optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+            print("Příprava trénovacích dat pro PyTorch...")
+            context_tensor = torch.tensor([item[0] for item in cbow_data], dtype=torch.long)
+            target_tensor = torch.tensor([item[1] for item in cbow_data], dtype=torch.long)
+            dataset = torch.utils.data.TensorDataset(context_tensor, target_tensor)
+            use_pin_memory = (device.type == 'cuda')
+            num_workers = 0 if device.type == 'cuda' else min(4, multiprocessing.cpu_count())
+            dataloader = torch.utils.data.DataLoader(
+                dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=num_workers,
+                pin_memory=use_pin_memory
+            )
 
-                # Prepare data for training
-                print("Příprava trénovacích dat pro PyTorch...")
+            model.train()
+            for epoch in range(epochs):
+                total_loss = 0
+                progress_bar = tqdm(dataloader, desc=f"Epocha {epoch + 1}/{epochs}")
+                for context_batch, target_batch in progress_bar:
+                    context_batch = context_batch.to(device)
+                    target_batch = target_batch.to(device)
+                    optimizer.zero_grad()
+                    log_probs = model(context_batch)
+                    loss = loss_function(log_probs, target_batch)
+                    loss.backward()
+                    optimizer.step()
+                    total_loss += loss.item()
+                    progress_bar.set_postfix({'loss': loss.item()})
+                avg_loss = total_loss / len(dataloader)
+                print(f"Epocha {epoch + 1}/{epochs}, Průměrná ztráta: {avg_loss:.4f}")
 
-                # Move tensors to device first before creating dataset
-                context_tensor = torch.tensor([item[0] for item in cbow_data], dtype=torch.long)
-                target_tensor = torch.tensor([item[1] for item in cbow_data], dtype=torch.long)
+            print("Trénování dokončeno.")
+            save_model(model, output_dir)
 
-                # Create dataset with CPU tensors
-                dataset = torch.utils.data.TensorDataset(context_tensor, target_tensor)
-
-                # Only use pin_memory when device is CUDA and tensors are on CPU
-                use_pin_memory = (device.type == 'cuda')
-
-                # Use multiple workers for data loading if possible
-                num_workers = 0 if device.type == 'cuda' else min(4, multiprocessing.cpu_count())
-                dataloader = torch.utils.data.DataLoader(
-                    dataset,
-                    batch_size=batch_size,
-                    shuffle=True,
-                    num_workers=num_workers,
-                    pin_memory=use_pin_memory
-                )
-
-                # Train the model
-                model.train()
-                for epoch in range(epochs):
-                    total_loss = 0
-                    progress_bar = tqdm(dataloader, desc=f"Epocha {epoch + 1}/{epochs}")
-                    for context_batch, target_batch in progress_bar:
-                        # Move batches to device here
-                        context_batch = context_batch.to(device)
-                        target_batch = target_batch.to(device)
-
-                        optimizer.zero_grad()
-                        log_probs = model(context_batch)
-                        loss = loss_function(log_probs, target_batch)
-                        loss.backward()
-                        optimizer.step()
-                        total_loss += loss.item()
-                        progress_bar.set_postfix({'loss': loss.item()})
-
-                    avg_loss = total_loss / len(dataloader)
-                    print(f"Epocha {epoch + 1}/{epochs}, Průměrná ztráta: {avg_loss:.4f}")
-
-                print("Trénování dokončeno.")
-
-                # Save the model
-                save_model(model, output_dir)
-
-                # Extract embeddings if needed
-                if embeddings is None:
-                    print("Extrakce embeddingů z modelu...")
-                    embeddings = model.embeddings.weight.data.cpu().numpy()
-                    save_embeddings(embeddings, output_dir)
+            if embeddings is None:
+                print("Extrakce embeddingů z modelu...")
+                embeddings = model.embeddings.weight.data.cpu().numpy()
+                save_embeddings(embeddings, output_dir)
 
     # Evaluate the model - get nearest neighbors for test words in parallel
     print("\n--- Vyhodnocení modelu (nejbližší sousedé) ---")
@@ -424,46 +441,7 @@ def main():
             neighbor_str = ", ".join([f"{n} ({s:.2f})" for n, s in neighbors])
             print(f"Nejbližší k '{word}': {neighbor_str}")
 
-    # Visualization
-    import matplotlib.pyplot as plt
-    from sklearn.manifold import TSNE
-    import seaborn as sns
-    from adjustText import adjust_text
-    import random
-    sns.set_theme(style="whitegrid")
-
-    print("Generuji t-SNE vizualizaci embeddingů...")
-    tsne = TSNE(n_components=2, random_state=42)
-
-    # Select random words for better visualization
-    vis_embeddings_count = 200
-    vocab_size = embeddings.shape[0]
-    random_indices = random.sample(range(vocab_size), min(vis_embeddings_count, vocab_size))
-
-    # Apply t-SNE to randomly selected embeddings
-    selected_embeddings = embeddings[random_indices]
-    embeddings_2d = tsne.fit_transform(selected_embeddings)
-
-    plt.figure(figsize=(16, 16))
-    scatter = plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], alpha=0.5)
-
-    # Create texts with better positioning
-    texts = []
-    for i, idx in enumerate(random_indices):
-        word = ix_to_word[idx]
-        texts.append(plt.text(embeddings_2d[i, 0], embeddings_2d[i, 1], word, fontsize=8))
-
-    # Adjust text positions to minimize overlap
-    adjust_text(texts, arrowprops=dict(arrowstyle='-', color='black', lw=0.5))
-
-    plt.title("t-SNE vizualizace náhodně vybraných embeddingů")
-    plt.tight_layout()
-
-    # Save visualization to output directory
-    viz_path = output_dir / "word_embeddings.png"
-    plt.savefig(viz_path, dpi=300)  # Save high-resolution image
-    print(f"Vizualizace uložena do {viz_path}")
-    plt.show()
+    visualize_embeddings(embeddings, ix_to_word, output_dir)
 
 
 if __name__ == "__main__":
