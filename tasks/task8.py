@@ -54,7 +54,7 @@ def extract_gzip(gzip_path, output_path):
         raise
 
 
-def download_and_extract(url, input_dir, output_dir):
+def download_and_extract(url, input_dir):
     """Download and extract a file if it doesn't already exist."""
     gzip_path = input_dir / "cs.txt.gz"
     output_path = input_dir / "cs.txt"
@@ -139,12 +139,10 @@ def tokenize_and_build_vocab(input_path, vocab_size, max_lines):
     return word_to_ix, ix_to_word, tokens
 
 
-def create_cbow_training_data(tokens, word_to_ix, window_size):
-    """Create CBOW training data from tokens."""
-    print(f"Vytvářím CBOW trénovací data (window_size={window_size})...")
+def process_cbow_chunk(chunk, word_to_ix, window_size):
     data = []
     unk_ix = word_to_ix['<UNK>']
-    token_indices = [word_to_ix.get(word, unk_ix) for word in tokens]
+    token_indices = [word_to_ix.get(word, unk_ix) for word in chunk]
 
     for i in range(window_size, len(token_indices) - window_size):
         context_indices = (
@@ -153,6 +151,21 @@ def create_cbow_training_data(tokens, word_to_ix, window_size):
         )
         target_index = token_indices[i]
         data.append((context_indices, target_index))
+
+    return data
+
+
+def create_cbow_training_data(tokens, word_to_ix, window_size):
+    print(f"Vytvářím CBOW trénovací data (window_size={window_size}) paralelně...")
+    num_processes = multiprocessing.cpu_count()
+    chunk_size = max(1, len(tokens) // num_processes)
+    chunks = [tokens[i:i + chunk_size] for i in range(0, len(tokens), chunk_size)]
+
+    data = []
+    with ProcessPoolExecutor(max_workers=num_processes) as executor:
+        futures = [executor.submit(process_cbow_chunk, chunk, word_to_ix, window_size) for chunk in chunks]
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Zpracování CBOW chunků"):
+            data.extend(future.result())
 
     print(f"Počet trénovacích vzorků: {len(data)}")
     return data
@@ -203,10 +216,10 @@ def train_cbow_model(cbow_data, word_to_ix, output_dir, embedding_dim, learning_
     loss_function = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     print("Příprava trénovacích dat pro PyTorch...")
-    context_tensor = torch.tensor([item[0] for item in cbow_data], dtype=torch.long)
-    target_tensor = torch.tensor([item[1] for item in cbow_data], dtype=torch.long)
+    context_tensor = torch.tensor([item[0] for item in cbow_data], dtype=torch.long).to(device)
+    target_tensor = torch.tensor([item[1] for item in cbow_data], dtype=torch.long).to(device)
     dataset = torch.utils.data.TensorDataset(context_tensor, target_tensor)
-    use_pin_memory = (device.type == 'cuda')
+    use_pin_memory = (device.type == 'cuda' and context_tensor.device.type == 'cpu')
     num_workers = 0 if device.type == 'cuda' else min(4, multiprocessing.cpu_count())
     dataloader = torch.utils.data.DataLoader(
         dataset,
@@ -360,14 +373,13 @@ def main():
     url = "https://lindat.mff.cuni.cz/repository/xmlui/bitstream/handle/11234/1-2735/cs.txt.gz?sequence=54&isAllowed=y"
     input_dir = Path("../input/task8")
     output_dir = Path("../output/task8")
-    vocab_size = 10000
-    max_lines = 200_000
+    vocab_size = 10_000
+    max_lines = 500_000
     window_size = 2
     embedding_dim = 100
     learning_rate = 0.01
     epochs = 5
     batch_size = 128
-    vis_embeddings_count = 200
 
     input_dir.mkdir(exist_ok=True, parents=True)
     output_dir.mkdir(exist_ok=True, parents=True)
@@ -395,7 +407,7 @@ def main():
     else:
         print("Některé komponenty chybí, zahajuji zpracování dat a trénink...")
         if not vocab_exists or not embeddings_exist:
-            download_and_extract(url, input_dir, output_dir)
+            download_and_extract(url, input_dir)
             word_to_ix, ix_to_word, tokens = tokenize_and_build_vocab(input_dir / "cs.txt", vocab_size, max_lines)
             save_vocab(word_to_ix, output_dir)
         if not model_exists or not embeddings_exist:
