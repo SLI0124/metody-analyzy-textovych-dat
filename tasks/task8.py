@@ -251,184 +251,137 @@ def visualize_embeddings(embeddings, ix_to_word, output_dir, vis_embeddings_coun
     plt.show()
 
 
+def prepare_data(url, input_dir, output_dir, max_lines=200_000, vocab_size=10000, window_size=2):
+    gzip_path = input_dir / "cs.txt.gz"
+    output_path = input_dir / "cs.txt"
+
+    # Download and extract data if needed
+    if not gzip_path.exists():
+        download_file(url, gzip_path)
+    else:
+        print(f"Soubor {gzip_path} již existuje, přeskakuji stahování.")
+
+    if not output_path.exists():
+        while not output_path.exists():
+            try:
+                extract_gzip(gzip_path, output_path)
+            except EOFError:
+                print("Opakuji stažení a extrakci...")
+                download_file(url, gzip_path)
+            else:
+                break
+    else:
+        print(f"Soubor {output_path} již existuje, přeskakuji extrakci.")
+
+    # Tokenize text in parallel
+    print("Načítám a tokenizuji text...")
+    tokens = []
+    if output_path.exists():
+        with open(output_path, 'r', encoding='utf-8') as f:
+            lines = [line for i, line in enumerate(f) if i < max_lines]
+        num_processes = multiprocessing.cpu_count()
+        chunk_size = max(1, len(lines) // num_processes)
+        chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
+        print(f"Paralelní zpracování textu pomocí {num_processes} procesů...")
+        with ProcessPoolExecutor(max_workers=num_processes) as executor:
+            futures = [executor.submit(process_chunk, chunk) for chunk in chunks]
+            for future in tqdm(as_completed(futures), total=len(futures), desc="Tokenizace chunků"):
+                tokens.extend(future.result())
+        print(f"Celkem tokenů: {len(tokens)}")
+    else:
+        print("Chyba: Extrahovaný soubor nenalezen.")
+        return None, None, None, None
+
+    print(f"Vytvářím slovník (velikost {vocab_size})...")
+    word_to_ix, ix_to_word, word_counts = build_vocab(tokens, vocab_size)
+    actual_vocab_size = len(word_to_ix)
+    print(f"Slovník vytvořen, obsahuje {actual_vocab_size} slov")
+    save_vocab(word_to_ix, output_dir)
+
+    print(f"Vytvářím CBOW trénovací data (window_size={window_size})...")
+    cbow_data = create_cbow_data(tokens, word_to_ix, window_size)
+    print(f"Počet trénovacích vzorků: {len(cbow_data)}")
+    return word_to_ix, ix_to_word, cbow_data, tokens
+
+
+def train_model(cbow_data, word_to_ix, output_dir, embedding_dim=100, learning_rate=0.01, epochs=5, batch_size=128):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Používám zařízení: {device}")
+    vocab_size = len(word_to_ix)
+    model = CBOW(vocab_size, embedding_dim).to(device)
+    loss_function = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    print("Příprava trénovacích dat pro PyTorch...")
+    context_tensor = torch.tensor([item[0] for item in cbow_data], dtype=torch.long)
+    target_tensor = torch.tensor([item[1] for item in cbow_data], dtype=torch.long)
+    dataset = torch.utils.data.TensorDataset(context_tensor, target_tensor)
+    use_pin_memory = (device.type == 'cuda')
+    num_workers = 0 if device.type == 'cuda' else min(4, multiprocessing.cpu_count())
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=use_pin_memory
+    )
+    model.train()
+    for epoch in range(epochs):
+        total_loss = 0
+        progress_bar = tqdm(dataloader, desc=f"Epocha {epoch + 1}/{epochs}")
+        for context_batch, target_batch in progress_bar:
+            context_batch = context_batch.to(device)
+            target_batch = target_batch.to(device)
+            optimizer.zero_grad()
+            log_probs = model(context_batch)
+            loss = loss_function(log_probs, target_batch)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+            progress_bar.set_postfix({'loss': loss.item()})
+        avg_loss = total_loss / len(dataloader)
+        print(f"Epocha {epoch + 1}/{epochs}, Průměrná ztráta: {avg_loss:.4f}")
+    print("Trénování dokončeno.")
+    save_model(model, output_dir)
+    embeddings = model.embeddings.weight.data.cpu().numpy()
+    save_embeddings(embeddings, output_dir)
+    return model, embeddings
+
+
 def main():
     url = "https://lindat.mff.cuni.cz/repository/xmlui/bitstream/handle/11234/1-2735/cs.txt.gz?sequence=54&isAllowed=y"
-
-    # Create input and output directories
     input_dir = Path("../input/task8")
     output_dir = Path("../output/task8")
     input_dir.mkdir(exist_ok=True, parents=True)
     output_dir.mkdir(exist_ok=True, parents=True)
 
-    gzip_path = input_dir / "cs.txt.gz"
-    output_path = input_dir / "cs.txt"
-
-    # Prepare needed variables
     model = None
     word_to_ix = None
     ix_to_word = None
     embeddings = None
 
-    # Check if individual components exist and load them
     vocab_exists = check_vocab_exists(output_dir)
     embeddings_exist = check_embeddings_exist(output_dir)
     model_exists = check_model_exists(output_dir)
 
-    # Load vocabulary if it exists
     if vocab_exists:
         word_to_ix, ix_to_word = load_vocab(output_dir)
-
-    # Load embeddings if they exist
     if embeddings_exist:
         embeddings = load_embeddings(output_dir)
-
-    # Load the model if it exists and we have vocabulary size
     if model_exists and word_to_ix is not None:
         vocab_size = len(word_to_ix)
-        # If embeddings exist, use their dimension
         embedding_dim = embeddings.shape[1] if embeddings is not None else 100
         model = load_model(output_dir, vocab_size, embedding_dim)
 
-    # If all components exist, skip processing and training
     if model is not None and word_to_ix is not None and embeddings is not None:
         print("Všechny komponenty již existují, přeskočeno zpracování a trénink.")
     else:
         print("Některé komponenty chybí, zahajuji zpracování dat a trénink...")
+        if not vocab_exists or not embeddings_exist:
+            word_to_ix, ix_to_word, cbow_data, tokens = prepare_data(url, input_dir, output_dir)
+        if not model_exists or not embeddings_exist:
+            if word_to_ix is not None and ix_to_word is not None and cbow_data is not None:
+                model, embeddings = train_model(cbow_data, word_to_ix, output_dir)
 
-        # Download and extract data if needed
-        if not gzip_path.exists():
-            download_file(url, gzip_path)
-        else:
-            print(f"Soubor {gzip_path} již existuje, přeskakuji stahování.")
-
-        if not output_path.exists():
-            while not output_path.exists():
-                try:
-                    extract_gzip(gzip_path, output_path)
-                except EOFError:
-                    print("Opakuji stažení a extrakci...")
-                    download_file(url, gzip_path)
-                else:
-                    break
-        else:
-            print(f"Soubor {output_path} již existuje, přeskakuji extrakci.")
-
-        # Tokenize text in parallel if we need vocab or embeddings
-        tokens = None
-        if word_to_ix is None or embeddings is None:
-            print("Načítám a tokenizuji text...")
-            max_lines = 200_000
-            tokens = []
-            if output_path.exists():
-                # Count lines first to know the total
-                with open(output_path, 'r', encoding='utf-8') as f:
-                    total_lines = min(sum(1 for _ in f), max_lines)
-
-                # Read all lines up to max_lines
-                with open(output_path, 'r', encoding='utf-8') as f:
-                    lines = [line for i, line in enumerate(f) if i < max_lines]
-
-                # Determine optimal chunk size based on CPU count
-                num_processes = multiprocessing.cpu_count()
-                chunk_size = max(1, len(lines) // num_processes)
-                chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
-
-                print(f"Paralelní zpracování textu pomocí {num_processes} procesů...")
-                with ProcessPoolExecutor(max_workers=num_processes) as executor:
-                    futures = [executor.submit(process_chunk, chunk) for chunk in chunks]
-
-                    # Process results as they complete
-                    for future in tqdm(as_completed(futures), total=len(futures), desc="Tokenizace chunků"):
-                        tokens.extend(future.result())
-
-                print(f"Celkem tokenů: {len(tokens)}")
-            else:
-                print("Chyba: Extrahovaný soubor nenalezen.")
-                return
-
-        # Build vocabulary if needed
-        if word_to_ix is None:
-            if tokens is None:
-                print("Chyba: Tokeny nejsou k dispozici pro vytvoření slovníku.")
-                return
-            vocab_size = 10000
-            print(f"Vytvářím slovník (velikost {vocab_size})...")
-            word_to_ix, ix_to_word, word_counts = build_vocab(tokens, vocab_size)
-            actual_vocab_size = len(word_to_ix)
-            print(f"Slovník vytvořen, obsahuje {actual_vocab_size} slov")
-            save_vocab(word_to_ix, output_dir)
-
-        # Train the model and extract embeddings if needed
-        if model is None or embeddings is None:
-            if tokens is None:
-                print("Chyba: Tokeny nejsou k dispozici pro trénink modelu.")
-                return
-            window_size = 2
-            print(f"Vytvářím CBOW trénovací data (window_size={window_size})...")
-            cbow_data = create_cbow_data(tokens, word_to_ix, window_size)
-            print(f"Počet trénovacích vzorků: {len(cbow_data)}")
-
-            if not cbow_data:
-                print("Nebyly vygenerovány žádné trénovací vzorky. Zkontrolujte text a parametry.")
-                return
-
-            embedding_dim = 100
-            learning_rate = 0.01
-            epochs = 5
-            batch_size = 128
-
-            print("\n--- Trénování CBOW modelu ---")
-            print(
-                f"Parametry: embedding_dim={embedding_dim}, lr={learning_rate}, epochs={epochs}, batch_size={batch_size}")
-
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            print(f"Používám zařízení: {device}")
-
-            vocab_size = len(word_to_ix)
-            model = CBOW(vocab_size, embedding_dim).to(device)
-            loss_function = nn.CrossEntropyLoss()
-            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-
-            print("Příprava trénovacích dat pro PyTorch...")
-            context_tensor = torch.tensor([item[0] for item in cbow_data], dtype=torch.long)
-            target_tensor = torch.tensor([item[1] for item in cbow_data], dtype=torch.long)
-            dataset = torch.utils.data.TensorDataset(context_tensor, target_tensor)
-            use_pin_memory = (device.type == 'cuda')
-            num_workers = 0 if device.type == 'cuda' else min(4, multiprocessing.cpu_count())
-            dataloader = torch.utils.data.DataLoader(
-                dataset,
-                batch_size=batch_size,
-                shuffle=True,
-                num_workers=num_workers,
-                pin_memory=use_pin_memory
-            )
-
-            model.train()
-            for epoch in range(epochs):
-                total_loss = 0
-                progress_bar = tqdm(dataloader, desc=f"Epocha {epoch + 1}/{epochs}")
-                for context_batch, target_batch in progress_bar:
-                    context_batch = context_batch.to(device)
-                    target_batch = target_batch.to(device)
-                    optimizer.zero_grad()
-                    log_probs = model(context_batch)
-                    loss = loss_function(log_probs, target_batch)
-                    loss.backward()
-                    optimizer.step()
-                    total_loss += loss.item()
-                    progress_bar.set_postfix({'loss': loss.item()})
-                avg_loss = total_loss / len(dataloader)
-                print(f"Epocha {epoch + 1}/{epochs}, Průměrná ztráta: {avg_loss:.4f}")
-
-            print("Trénování dokončeno.")
-            save_model(model, output_dir)
-
-            if embeddings is None:
-                print("Extrakce embeddingů z modelu...")
-                embeddings = model.embeddings.weight.data.cpu().numpy()
-                save_embeddings(embeddings, output_dir)
-
-    # Evaluate the model - get nearest neighbors for test words in parallel
     print("\n--- Vyhodnocení modelu (nejbližší sousedé) ---")
     test_words = ["muž", "žena", "král", "královna", "praha", "řeka", "pes", "kočka", "škola", "auto"]
 
