@@ -234,37 +234,30 @@ def train_cbow_model(cbow_data, word_to_ix, output_dir, embedding_dim, learning_
     return model, embeddings
 
 
-def get_nearest_neighbors(word, word_to_ix, ix_to_word, embeddings, n=5):
-    if word not in word_to_ix:
-        return f"Slovo '{word}' není ve slovníku."
+def get_nearest_neighbors(words, word_to_ix, ix_to_word, embeddings, n=5):
+    """Finds the nearest neighbors for one word or multiple words based on cosine similarity."""
+    # Pokud je vstupem jedno slovo, vrať přímo výsledek pro to slovo
+    if isinstance(words, str):
+        word = words
+        if word not in word_to_ix:
+            return f"Slovo '{word}' není ve slovníku."
 
-    word_ix = word_to_ix[word]
-    word_vec = embeddings[word_ix].reshape(1, -1)
+        word_ix = word_to_ix[word]
+        word_vec = embeddings[word_ix].reshape(1, -1)
 
-    other_indices = [i for i in range(embeddings.shape[0]) if i != word_ix]
-    other_vecs = embeddings[other_indices]
+        other_indices = [i for i in range(embeddings.shape[0]) if i != word_ix]
+        other_vecs = embeddings[other_indices]
 
-    similarities = cosine_similarity(word_vec, other_vecs)[0]
+        similarities = cosine_similarity(word_vec, other_vecs)[0]
 
-    sorted_indices = np.argsort(similarities)[::-1]
-    neighbors = [(ix_to_word[other_indices[i]], similarities[i]) for i in sorted_indices[:n]]
-    return neighbors
+        sorted_indices = np.argsort(similarities)[::-1]
+        neighbors = [(ix_to_word[other_indices[i]], similarities[i]) for i in sorted_indices[:n]]
+        return neighbors
 
-
-def parallel_nearest_neighbors(test_words, word_to_ix, ix_to_word, embeddings, n=5):
+    # Pokud je vstupem seznam slov, zpracuj každé slovo postupně
     results = {}
-    with ProcessPoolExecutor() as executor:
-        futures = {
-            executor.submit(
-                get_nearest_neighbors,
-                word,
-                word_to_ix,
-                ix_to_word,
-                embeddings,
-                n): word for word in test_words}
-        for future in as_completed(futures):
-            word = futures[future]
-            results[word] = future.result()
+    for word in words:
+        results[word] = get_nearest_neighbors(word, word_to_ix, ix_to_word, embeddings, n)
     return results
 
 
@@ -345,9 +338,6 @@ def save_embeddings(embeddings, output_dir):
 
 def load_embeddings(output_dir):
     embeddings_path = output_dir / "embeddings.npy"
-    if not embeddings_path.exists():
-        return None
-
     print(f"Načítám embeddings z {embeddings_path}...")
     embeddings = np.load(embeddings_path)
     print(f"Embeddings načteny, tvar: {embeddings.shape}")
@@ -414,7 +404,7 @@ def main():
     print("\n--- Vyhodnocení modelu (nejbližší sousedé) ---")
     test_words = ["muž", "žena", "král", "královna", "praha", "řeka", "pes", "kočka", "škola", "auto"]
 
-    neighbors_results = parallel_nearest_neighbors(test_words, word_to_ix, ix_to_word, embeddings)
+    neighbors_results = get_nearest_neighbors(test_words, word_to_ix, ix_to_word, embeddings)
 
     for word, neighbors in neighbors_results.items():
         neighbor_str = ", ".join([f"{n} ({s:.2f})" for n, s in neighbors])
