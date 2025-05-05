@@ -19,6 +19,133 @@ from torch.utils.data import TensorDataset, DataLoader
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+class CBOW_Scratch:
+    def __init__(self, vocab_size, embedding_dim):
+        self.vocab_size = vocab_size
+        self.embedding_dim = embedding_dim
+
+        # Initialize weights with small random values
+        self.embedding_matrix = np.random.randn(vocab_size, embedding_dim) * 0.01
+        self.output_weights = np.random.randn(vocab_size, embedding_dim) * 0.01
+        self.output_bias = np.zeros(vocab_size)
+
+    def forward(self, context_indices):
+        # Get embeddings for context words
+        context_embeddings = self.embedding_matrix[context_indices]
+
+        # Average the context embeddings
+        mean_embedding = np.mean(context_embeddings, axis=0)
+
+        # Linear transformation
+        z = np.dot(self.output_weights, mean_embedding) + self.output_bias
+
+        # Softmax
+        exp_z = np.exp(z - np.max(z))  # For numerical stability
+        probs = exp_z / np.sum(exp_z)
+
+        return probs, mean_embedding
+
+    def backward(self, context_indices, target_index, probs, mean_embedding, learning_rate):
+        # Calculate gradient of loss with respect to z
+        dz = probs.copy()
+        dz[target_index] -= 1
+
+        # Update output weights and bias
+        dw_output = np.outer(dz, mean_embedding)
+        db_output = dz.copy()
+
+        # Gradient of loss with respect to mean embedding
+        d_mean_embedding = np.dot(self.output_weights.T, dz)
+
+        # Distribute gradient equally to all context words
+        d_context = d_mean_embedding / len(context_indices)
+
+        # Update embedding matrix
+        for idx in context_indices:
+            self.embedding_matrix[idx] -= learning_rate * d_context
+
+        self.output_weights -= learning_rate * dw_output
+        self.output_bias -= learning_rate * db_output
+
+    def train(self, training_data, epochs=5, learning_rate=0.01, batch_size=128):
+        losses = []
+
+        for epoch in range(epochs):
+            total_loss = 0
+            random.shuffle(training_data)
+
+            # Process in batches
+            # Vylepšený tqdm s výpisem ztráty během tréninku
+            progress_bar = tqdm(range(0, len(training_data), batch_size),
+                                desc=f"Epoch {epoch + 1}/{epochs}")
+
+            for i in progress_bar:
+                batch = training_data[i:i + batch_size]
+
+                # Vectorized forward pass for whole batch
+                contexts = np.array([x[0] for x in batch])
+                targets = np.array([x[1] for x in batch])
+
+                # Get embeddings for all contexts
+                context_embeddings = self.embedding_matrix[contexts]  # [batch_size, window_size*2, emb_dim]
+
+                # Average embeddings
+                mean_embeddings = np.mean(context_embeddings, axis=1)  # [batch_size, emb_dim]
+
+                # Calculate scores
+                scores = np.dot(mean_embeddings, self.output_weights.T) + self.output_bias  # [batch_size, vocab_size]
+
+                # Softmax
+                max_scores = np.max(scores, axis=1, keepdims=True)
+                exp_scores = np.exp(scores - max_scores)
+                probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+
+                # Calculate loss
+                batch_loss = -np.sum(np.log(probs[np.arange(len(batch)), targets] + 1e-10)) / len(batch)
+                total_loss += batch_loss * len(batch)
+
+                # Aktualizace tqdm s aktuální hodnotou ztráty
+                progress_bar.set_postfix(loss=f"{batch_loss:.4f}")
+
+                # Backward pass
+                dz = probs.copy()
+                dz[np.arange(len(batch)), targets] -= 1
+
+                # Gradients for output weights and bias
+                dw_output = np.dot(dz.T, mean_embeddings) / len(batch)
+                db_output = np.mean(dz, axis=0)
+
+                # Gradient for embeddings
+                d_mean_embedding = np.dot(dz, self.output_weights) / len(batch)
+
+                # Update parameters
+                self.output_weights -= learning_rate * dw_output
+                self.output_bias -= learning_rate * db_output
+
+                # Update embeddings (this part is trickier to vectorize completely)
+                for j, context in enumerate(contexts):
+                    d_context = d_mean_embedding[j] / len(context)
+                    self.embedding_matrix[context] -= learning_rate * d_context
+
+            avg_epoch_loss = total_loss / len(training_data)
+            losses.append(avg_epoch_loss)
+            print(f"Epoch {epoch + 1}/{epochs}, Average loss: {avg_epoch_loss:.4f}")
+
+        return losses
+
+    def get_embeddings(self):
+        return self.embedding_matrix
+
+
+def train_cbow_model_from_scratch(training_data, vocab_size, embedding_dim=100,
+                                  learning_rate=0.01, epochs=5, batch_size=128):
+    print("Training CBOW model from scratch...")
+    model = CBOW_Scratch(vocab_size, embedding_dim)
+    losses = model.train(training_data, epochs, learning_rate, batch_size)
+    embeddings = model.get_embeddings()
+    return model, embeddings, losses
+
+
 def tokenize_text(text):
     return re.findall(r"[a-záčďéěíňóřšťúůýž]+", text.lower(), re.UNICODE)
 
@@ -110,9 +237,9 @@ def prepare_training_tensors(cbow_data, batch_size=128):
     return dataloader
 
 
-class CBOW(nn.Module):
+class CBOW_PyTorch(nn.Module):
     def __init__(self, vocab_size, embedding_dim):
-        super(CBOW, self).__init__()
+        super(CBOW_PyTorch, self).__init__()
         self.embeddings = nn.Embedding(vocab_size, embedding_dim)
         self.linear = nn.Linear(embedding_dim, vocab_size)
 
@@ -129,7 +256,7 @@ class CBOW(nn.Module):
 def train_cbow_model(dataloader, vocab_size, embedding_dim=100, learning_rate=0.01,
                      epochs=5, output_dir=None):
     print(f"Using device: {DEVICE}")
-    model = CBOW(vocab_size, embedding_dim).to(DEVICE)
+    model = CBOW_PyTorch(vocab_size, embedding_dim).to(DEVICE)
     loss_function = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -181,7 +308,7 @@ def load_model(output_dir, vocab_size, embedding_dim=100):
 
     print(f"Loading model from {model_path}...")
 
-    model = CBOW(vocab_size, embedding_dim)
+    model = CBOW_PyTorch(vocab_size, embedding_dim)
     try:
         model.load_state_dict(torch.load(model_path))
         print(f"Model successfully loaded")
@@ -328,7 +455,7 @@ def main():
     embedding_dim = 100
     learning_rate = 0.01
     epochs = 5
-    batch_size = 128
+    batch_size = 256
     visualize_sample_count = 750
 
     # Load and preprocess data from Hugging Face dataset
@@ -354,65 +481,66 @@ def main():
     # Create CBOW training data
     cbow_data = create_cbow_training_data(all_tokens, word_to_idx, window_size)
 
-    # Prepare dataloader
+    # Prepare dataloader for PyTorch implementation
     dataloader = prepare_training_tensors(cbow_data, batch_size)
 
-    # Check if embeddings exist
-    embeddings_path = output_dir / "embeddings.npy"
-    if embeddings_path.exists():
-        print(f"Embeddings file found at {embeddings_path}")
-        embeddings = load_embeddings(output_dir)
+    # Train both models
+    print("\n=== Training PyTorch Implementation (Variant A) ===")
+    model_pytorch, embeddings_pytorch = train_cbow_model(
+        dataloader=dataloader,
+        vocab_size=len(word_to_idx),
+        embedding_dim=embedding_dim,
+        learning_rate=learning_rate,
+        epochs=epochs,
+        output_dir=output_dir / "pytorch"
+    )
 
-        # Check if model exists
-        model_path = output_dir / "cbow_model.pth"
-        if model_path.exists():
-            print(f"Model file found at {model_path}")
-            model = load_model(output_dir, len(word_to_idx), embedding_dim)
-            if model is None:
-                print("Error loading model, training new model...")
-                model, embeddings = train_cbow_model(
-                    dataloader=dataloader,
-                    vocab_size=len(word_to_idx),
-                    embedding_dim=embedding_dim,
-                    learning_rate=learning_rate,
-                    epochs=epochs,
-                    output_dir=output_dir
-                )
-        else:
-            print("Model file not found, training new model...")
-            model, embeddings = train_cbow_model(
-                dataloader=dataloader,
-                vocab_size=len(word_to_idx),
-                embedding_dim=embedding_dim,
-                learning_rate=learning_rate,
-                epochs=epochs,
-                output_dir=output_dir
-            )
-    else:
-        print("Embeddings file not found, training new model...")
-        # Train model
-        model, embeddings = train_cbow_model(
-            dataloader=dataloader,
-            vocab_size=len(word_to_idx),
-            embedding_dim=embedding_dim,
-            learning_rate=learning_rate,
-            epochs=epochs,
-            output_dir=output_dir
-        )
+    print("\n=== Training From-Scratch Implementation (Variant B) ===")
+    model_scratch, embeddings_scratch, losses = train_cbow_model_from_scratch(
+        training_data=cbow_data,
+        vocab_size=len(word_to_idx),
+        embedding_dim=embedding_dim,
+        learning_rate=learning_rate,
+        epochs=epochs,
+        batch_size=batch_size
+    )
+    save_embeddings(embeddings_scratch, output_dir / "scratch")
 
-    # Evaluate model - nearest neighbors
-    print("\n=== Model Evaluation (nearest neighbors) ===")
+    # Evaluate both models
     test_words = ["muž", "žena", "král", "královna", "praha", "řeka", "pes", "kočka", "škola", "auto"]
-    neighbors_results = find_nearest_neighbors_batch(test_words, word_to_idx, idx_to_word, embeddings)
 
-    for word, neighbors in neighbors_results.items():
-        if isinstance(neighbors, str):  # If word not in vocabulary
+    print("\n=== PyTorch Implementation Results ===")
+    neighbors_pytorch = find_nearest_neighbors_batch(test_words, word_to_idx, idx_to_word, embeddings_pytorch)
+    for word, neighbors in neighbors_pytorch.items():
+        if isinstance(neighbors, str):
             print(neighbors)
         else:
             neighbor_str = ", ".join([f"{n} ({s:.2f})" for n, s in neighbors])
             print(f"Nearest to '{word}': {neighbor_str}")
 
-    visualize_embeddings(embeddings, idx_to_word, output_dir, visualize_sample_count)
+    print("\n=== From-Scratch Implementation Results ===")
+    neighbors_scratch = find_nearest_neighbors_batch(test_words, word_to_idx, idx_to_word, embeddings_scratch)
+    for word, neighbors in neighbors_scratch.items():
+        if isinstance(neighbors, str):
+            print(neighbors)
+        else:
+            neighbor_str = ", ".join([f"{n} ({s:.2f})" for n, s in neighbors])
+            print(f"Nearest to '{word}': {neighbor_str}")
+
+    # Visualize embeddings from both models
+    print("\nVisualizing PyTorch embeddings...")
+    visualize_embeddings(embeddings_pytorch, idx_to_word, output_dir / "pytorch", visualize_sample_count)
+
+    print("\nVisualizing From-Scratch embeddings...")
+    visualize_embeddings(embeddings_scratch, idx_to_word, output_dir / "scratch", visualize_sample_count)
+
+    # Compare training losses
+    print("\n=== Training Loss Comparison ===")
+    # For PyTorch, you would need to modify train_cbow_model to return losses
+    # Here we just show the from-scratch losses
+    print("From-Scratch Implementation Losses:")
+    for epoch, loss in enumerate(losses):
+        print(f"Epoch {epoch + 1}: {loss:.4f}")
 
 
 if __name__ == "__main__":
