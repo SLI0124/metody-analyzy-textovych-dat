@@ -15,6 +15,7 @@ from adjustText import adjust_text
 import random
 import nltk
 from torch.utils.data import TensorDataset, DataLoader
+import pickle
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -262,6 +263,8 @@ def train_cbow_model(dataloader, vocab_size, embedding_dim=100, learning_rate=0.
 
     model.train()
     print("Starting training...")
+    losses = []
+
     for epoch in range(epochs):
         total_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}")
@@ -279,6 +282,7 @@ def train_cbow_model(dataloader, vocab_size, embedding_dim=100, learning_rate=0.
             progress_bar.set_postfix({'loss': loss.item()})
 
         avg_loss = total_loss / len(dataloader)
+        losses.append(avg_loss)
         print(f"Epoch {epoch + 1}/{epochs}, Average loss: {avg_loss:.4f}")
 
     print("Training completed.")
@@ -288,8 +292,11 @@ def train_cbow_model(dataloader, vocab_size, embedding_dim=100, learning_rate=0.
     if output_dir:
         save_model(model, output_dir)
         save_embeddings(embeddings, output_dir)
+        loss_path = Path(output_dir) / "losses.npy"
+        np.save(loss_path, np.array(losses))
+        print(f"Losses saved to {loss_path}")
 
-    return model, embeddings
+    return model, embeddings, losses
 
 
 def save_model(model, output_dir):
@@ -448,6 +455,10 @@ def visualize_embeddings(embeddings, idx_to_word, output_dir=None, sample_count=
 def main():
     output_dir = Path("../output/task8")
     output_dir.mkdir(exist_ok=True, parents=True)
+    pytorch_dir = output_dir / "pytorch"
+    pytorch_dir.mkdir(exist_ok=True, parents=True)
+    scratch_dir = output_dir / "scratch"
+    scratch_dir.mkdir(exist_ok=True, parents=True)
 
     # Model parameters
     vocab_size = 10_000
@@ -458,57 +469,113 @@ def main():
     batch_size = 256
     visualize_sample_count = 750
 
-    # Load and preprocess data from Hugging Face dataset
-    tokenized_texts, all_tokens = load_and_preprocess_data(
-        dataset_name="wikimedia/wikipedia",
-        dataset_config="20231101.cs",
-        split="train[:1%]",
-        use_nltk=True
-    )
-
-    # Check if vocabulary exists
+    # 1. Kontrola/vytvoření dat a slovníku
+    all_tokens = []
     vocab_path = output_dir / "vocab.txt"
     if vocab_path.exists():
         print(f"Vocabulary file found at {vocab_path}")
         word_to_idx, idx_to_word = load_vocabulary(output_dir)
     else:
         print("Vocabulary file not found, creating new vocabulary...")
-        # Create vocabulary
+        # Načtení a předzpracování dat
+        tokenized_texts, all_tokens = load_and_preprocess_data(
+            dataset_name="wikimedia/wikipedia",
+            dataset_config="20231101.cs",
+            split="train[:1%]",
+            use_nltk=True
+        )
+        # Vytvoření slovníku
         word_to_idx, idx_to_word, counts = build_vocabulary(all_tokens, vocab_size)
-        # Save vocabulary
+        # Uložení slovníku
         save_vocabulary(word_to_idx, output_dir)
 
-    # Create CBOW training data
-    cbow_data = create_cbow_training_data(all_tokens, word_to_idx, window_size)
+    # 2. Kontrola/vytvoření CBOW trénovacích dat
+    cbow_data_path = output_dir / "cbow_data.pkl"
+    if cbow_data_path.exists():
+        print(f"CBOW training data found at {cbow_data_path}")
+        with open(cbow_data_path, "rb") as f:
+            cbow_data = pickle.load(f)
+    else:
+        print("CBOW training data not found, creating new data...")
+        # Načtení a předzpracování dat, pokud ještě nebylo provedeno
+        if not 'all_tokens' in locals():
+            tokenized_texts, all_tokens = load_and_preprocess_data(
+                dataset_name="wikimedia/wikipedia",
+                dataset_config="20231101.cs",
+                split="train[:1%]",
+                use_nltk=True
+            )
+        # Vytvoření CBOW trénovacích dat
+        cbow_data = create_cbow_training_data(all_tokens, word_to_idx, window_size)
+        # Uložení CBOW dat
+        with open(cbow_data_path, "wb") as f:
+            pickle.dump(cbow_data, f)
 
-    # Prepare dataloader for PyTorch implementation
+    # 3. Příprava PyTorch data loaderu
     dataloader = prepare_training_tensors(cbow_data, batch_size)
 
-    # Train both models
-    print("\n=== Training PyTorch Implementation (Variant A) ===")
-    model_pytorch, embeddings_pytorch = train_cbow_model(
-        dataloader=dataloader,
-        vocab_size=len(word_to_idx),
-        embedding_dim=embedding_dim,
-        learning_rate=learning_rate,
-        epochs=epochs,
-        output_dir=output_dir / "pytorch"
-    )
+    # 4. PyTorch model - Varianta A
+    print("\n=== PyTorch Implementation (Variant A) ===")
 
-    print("\n=== Training From-Scratch Implementation (Variant B) ===")
-    model_scratch, embeddings_scratch, losses = train_cbow_model_from_scratch(
-        training_data=cbow_data,
-        vocab_size=len(word_to_idx),
-        embedding_dim=embedding_dim,
-        learning_rate=learning_rate,
-        epochs=epochs,
-        batch_size=batch_size
-    )
-    save_embeddings(embeddings_scratch, output_dir / "scratch")
+    # Kontrola existence PyTorch modelu
+    pytorch_model_path = pytorch_dir / "cbow_model.pth"
+    pytorch_embeddings_path = pytorch_dir / "embeddings.npy"
+    pytorch_losses_path = pytorch_dir / "losses.npy"
 
-    # Evaluate both models
+    if pytorch_model_path.exists() and pytorch_embeddings_path.exists() and pytorch_losses_path.exists():
+        print(f"PyTorch model components found, loading from {pytorch_dir}")
+        # Model existuje, načteme ho
+        model_pytorch = load_model(pytorch_dir, len(word_to_idx), embedding_dim)
+        embeddings_pytorch = load_embeddings(pytorch_dir)
+        pytorch_losses = np.load(pytorch_losses_path)
+        print(f"PyTorch model loaded, embedding shape: {embeddings_pytorch.shape}")
+    else:
+        print(f"PyTorch model components missing, training new model")
+        # Trénování nového PyTorch modelu
+        model_pytorch, embeddings_pytorch, pytorch_losses = train_cbow_model(
+            dataloader=dataloader,
+            vocab_size=len(word_to_idx),
+            embedding_dim=embedding_dim,
+            learning_rate=learning_rate,
+            epochs=epochs,
+            output_dir=pytorch_dir
+        )
+
+    # 5. Model od základů - Varianta B
+    print("\n=== From-Scratch Implementation (Variant B) ===")
+
+    # Kontrola existence modelu od základů
+    scratch_embeddings_path = scratch_dir / "embeddings.npy"
+    scratch_losses_path = scratch_dir / "losses.npy"
+
+    if scratch_embeddings_path.exists() and scratch_losses_path.exists():
+        print(f"From-scratch model components found, loading from {scratch_dir}")
+        # Model existuje, načteme embeddingy a ztráty
+        embeddings_scratch = load_embeddings(scratch_dir)
+        scratch_losses = np.load(scratch_losses_path)
+        print(f"From-scratch embeddings loaded, shape: {embeddings_scratch.shape}")
+        # Model jen z embeddingů nemůžeme plně načíst, ale pro evaluaci stačí embeddingy
+        model_scratch = None
+    else:
+        print(f"From-scratch model components missing, training new model")
+        # Trénování nového modelu od základů
+        model_scratch, embeddings_scratch, scratch_losses = train_cbow_model_from_scratch(
+            training_data=cbow_data,
+            vocab_size=len(word_to_idx),
+            embedding_dim=embedding_dim,
+            learning_rate=learning_rate,
+            epochs=epochs,
+            batch_size=batch_size
+        )
+        # Uložení embeddingů a ztrát
+        save_embeddings(embeddings_scratch, scratch_dir)
+        np.save(scratch_dir / "losses.npy", scratch_losses)
+        print(f"From-scratch model saved to {scratch_dir}")
+
+    # 6. Evaluace a analýza modelů
     test_words = ["muž", "žena", "král", "královna", "praha", "řeka", "pes", "kočka", "škola", "auto"]
 
+    # 6.1 Evaluace PyTorch modelu
     print("\n=== PyTorch Implementation Results ===")
     neighbors_pytorch = find_nearest_neighbors_batch(test_words, word_to_idx, idx_to_word, embeddings_pytorch)
     for word, neighbors in neighbors_pytorch.items():
@@ -518,6 +585,7 @@ def main():
             neighbor_str = ", ".join([f"{n} ({s:.2f})" for n, s in neighbors])
             print(f"Nearest to '{word}': {neighbor_str}")
 
+    # 6.2 Evaluace modelu od základů
     print("\n=== From-Scratch Implementation Results ===")
     neighbors_scratch = find_nearest_neighbors_batch(test_words, word_to_idx, idx_to_word, embeddings_scratch)
     for word, neighbors in neighbors_scratch.items():
@@ -527,20 +595,31 @@ def main():
             neighbor_str = ", ".join([f"{n} ({s:.2f})" for n, s in neighbors])
             print(f"Nearest to '{word}': {neighbor_str}")
 
-    # Visualize embeddings from both models
+    # 7. Vizualizace embeddingů
+    # 7.1 Vizualizace PyTorch embeddingů
     print("\nVisualizing PyTorch embeddings...")
-    visualize_embeddings(embeddings_pytorch, idx_to_word, output_dir / "pytorch", visualize_sample_count)
+    visualize_embeddings(embeddings_pytorch, idx_to_word, pytorch_dir, visualize_sample_count)
 
+    # 7.2 Vizualizace embeddingů z modelu od základů
     print("\nVisualizing From-Scratch embeddings...")
-    visualize_embeddings(embeddings_scratch, idx_to_word, output_dir / "scratch", visualize_sample_count)
+    visualize_embeddings(embeddings_scratch, idx_to_word, scratch_dir, visualize_sample_count)
 
-    # Compare training losses
+    # 8. Porovnání ztrát během tréninku
     print("\n=== Training Loss Comparison ===")
-    # For PyTorch, you would need to modify train_cbow_model to return losses
-    # Here we just show the from-scratch losses
-    print("From-Scratch Implementation Losses:")
-    for epoch, loss in enumerate(losses):
-        print(f"Epoch {epoch + 1}: {loss:.4f}")
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, epochs + 1), pytorch_losses, 'b-', marker='o', label='PyTorch')
+    plt.plot(range(1, epochs + 1), scratch_losses, 'r-', marker='s', label='From Scratch')
+    plt.xlabel('Epoch')
+    plt.ylabel('Average Loss')
+    plt.title('Training Loss Comparison')
+    plt.legend()
+    plt.grid(True)
+
+    loss_plot_path = output_dir / "loss_comparison.png"
+    plt.savefig(loss_plot_path)
+    print(f"Loss comparison plot saved to {loss_plot_path}")
+
+    plt.show()
 
 
 if __name__ == "__main__":
