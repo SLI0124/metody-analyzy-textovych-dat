@@ -338,11 +338,17 @@ def main():
         split="train[:1%]"
     )
 
-    # Create vocabulary
-    word_to_idx, idx_to_word, counts = build_vocabulary(all_tokens, vocab_size)
-
-    # Save vocabulary
-    save_vocabulary(word_to_idx, output_dir)
+    # Check if vocabulary exists
+    vocab_path = output_dir / "vocab.txt"
+    if vocab_path.exists():
+        print(f"Vocabulary file found at {vocab_path}")
+        word_to_idx, idx_to_word = load_vocabulary(output_dir)
+    else:
+        print("Vocabulary file not found, creating new vocabulary...")
+        # Create vocabulary
+        word_to_idx, idx_to_word, counts = build_vocabulary(all_tokens, vocab_size)
+        # Save vocabulary
+        save_vocabulary(word_to_idx, output_dir)
 
     # Create CBOW training data
     cbow_data = create_cbow_training_data(all_tokens, word_to_idx, window_size)
@@ -350,15 +356,48 @@ def main():
     # Prepare dataloader
     dataloader = prepare_training_tensors(cbow_data, batch_size)
 
-    # Train model
-    model, embeddings = train_cbow_model(
-        dataloader=dataloader,
-        vocab_size=len(word_to_idx),
-        embedding_dim=embedding_dim,
-        learning_rate=learning_rate,
-        epochs=epochs,
-        output_dir=output_dir
-    )
+    # Check if embeddings exist
+    embeddings_path = output_dir / "embeddings.npy"
+    if embeddings_path.exists():
+        print(f"Embeddings file found at {embeddings_path}")
+        embeddings = load_embeddings(output_dir)
+
+        # Check if model exists
+        model_path = output_dir / "cbow_model.pth"
+        if model_path.exists():
+            print(f"Model file found at {model_path}")
+            model = load_model(output_dir, len(word_to_idx), embedding_dim)
+            if model is None:
+                print("Error loading model, training new model...")
+                model, embeddings = train_cbow_model(
+                    dataloader=dataloader,
+                    vocab_size=len(word_to_idx),
+                    embedding_dim=embedding_dim,
+                    learning_rate=learning_rate,
+                    epochs=epochs,
+                    output_dir=output_dir
+                )
+        else:
+            print("Model file not found, training new model...")
+            model, embeddings = train_cbow_model(
+                dataloader=dataloader,
+                vocab_size=len(word_to_idx),
+                embedding_dim=embedding_dim,
+                learning_rate=learning_rate,
+                epochs=epochs,
+                output_dir=output_dir
+            )
+    else:
+        print("Embeddings file not found, training new model...")
+        # Train model
+        model, embeddings = train_cbow_model(
+            dataloader=dataloader,
+            vocab_size=len(word_to_idx),
+            embedding_dim=embedding_dim,
+            learning_rate=learning_rate,
+            epochs=epochs,
+            output_dir=output_dir
+        )
 
     # Evaluate model - nearest neighbors
     print("\n=== Model Evaluation (nearest neighbors) ===")
