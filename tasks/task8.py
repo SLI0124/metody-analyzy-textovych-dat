@@ -63,6 +63,7 @@ def tokenize(text):
 
 
 def process_chunk(chunk):
+    """Helper function to tokenize a chunk of input text."""
     tokens = []
     for line in chunk:
         tokens.extend(tokenize(line))
@@ -86,44 +87,40 @@ def parallel_tokenize(lines):
     return tokens
 
 
-def build_vocab(tokens, vocab_size):
-    """Build a vocabulary from tokens."""
-    counts = Counter(tokens)
-    vocab = [word for word, _ in counts.most_common(vocab_size - 1)]
-    word_to_ix = {word: i for i, word in enumerate(vocab)}
-    word_to_ix['<UNK>'] = len(vocab)
-    ix_to_word = {i: word for word, i in word_to_ix.items()}
-    return word_to_ix, ix_to_word, counts
-
-
 def tokenize_and_build_vocab(input_path, vocab_size, max_lines):
     """Tokenize text and build a vocabulary."""
     print("Načítám a tokenizuji text...")
-    tokens = []
 
-    if input_path.exists():
-        with open(input_path, 'r', encoding='utf-8') as f:
-            lines = [line for i, line in enumerate(f) if i < max_lines]
+    lines = []
+    line_count = 0
+    f = open(input_path, 'r', encoding='utf-8')
+    while line_count < max_lines:
+        line = f.readline()
+        if line.strip():  # skip empty lines
+            lines.append(line)
+            line_count += 1
+    f.close()
 
-        tokens = parallel_tokenize(lines)
-
-        print(f"Celkem tokenů: {len(tokens)}")
-    else:
-        print("Chyba: Extrahovaný soubor nenalezen.")
-        return None, None, None
+    tokens = parallel_tokenize(lines)
+    print(f"Celkem tokenů: {len(tokens)}")
 
     print(f"Vytvářím slovník (velikost {vocab_size})...")
-    word_to_ix, ix_to_word, word_counts = build_vocab(tokens, vocab_size)
-    actual_vocab_size = len(word_to_ix)
+    counts = Counter(tokens)
+    vocab = [word for word, _ in counts.most_common(vocab_size - 1)]
+    word_to_idx = {word: i for i, word in enumerate(vocab)}
+    word_to_idx['<UNK>'] = len(vocab)
+    idx_to_word = {i: word for word, i in word_to_idx.items()}
+
+    actual_vocab_size = len(word_to_idx)
     print(f"Slovník vytvořen, obsahuje {actual_vocab_size} slov")
 
-    return word_to_ix, ix_to_word, tokens
+    return word_to_idx, idx_to_word, tokens, counts
 
 
-def process_cbow_chunk(chunk, word_to_ix, window_size):
+def process_cbow_chunk(chunk, word_to_idx, window_size):
     data = []
-    unk_ix = word_to_ix['<UNK>']
-    token_indices = [word_to_ix.get(word, unk_ix) for word in chunk]
+    unk_idx = word_to_idx['<UNK>']
+    token_indices = [word_to_idx.get(word, unk_idx) for word in chunk]
 
     for i in range(window_size, len(token_indices) - window_size):
         context_indices = (
@@ -136,7 +133,7 @@ def process_cbow_chunk(chunk, word_to_ix, window_size):
     return data
 
 
-def create_cbow_training_data(tokens, word_to_ix, window_size):
+def create_cbow_training_data(tokens, word_to_idx, window_size):
     print(f"Vytvářím CBOW trénovací data (window_size={window_size}) paralelně...")
     num_processes = NUMBER_OF_WORKERS
     chunk_size = max(1, len(tokens) // num_processes)
@@ -144,7 +141,7 @@ def create_cbow_training_data(tokens, word_to_ix, window_size):
 
     data = []
     with ProcessPoolExecutor(max_workers=num_processes) as executor:
-        futures = [executor.submit(process_cbow_chunk, chunk, word_to_ix, window_size) for chunk in chunks]
+        futures = [executor.submit(process_cbow_chunk, chunk, word_to_idx, window_size) for chunk in chunks]
         for future in tqdm(as_completed(futures), total=len(futures), desc="Zpracování CBOW chunků"):
             data.extend(future.result())
 
@@ -189,9 +186,9 @@ def load_model(output_dir, vocab_size, embedding_dim):
         return None
 
 
-def train_cbow_model(cbow_data, word_to_ix, output_dir, embedding_dim, learning_rate, epochs, batch_size):
+def train_cbow_model(cbow_data, word_to_idx, output_dir, embedding_dim, learning_rate, epochs, batch_size):
     print(f"Používám zařízení: {DEVICE}")
-    vocab_size = len(word_to_ix)
+    vocab_size = len(word_to_idx)
 
     model = CBOW(vocab_size, embedding_dim).to(DEVICE)
     loss_function = nn.CrossEntropyLoss()
@@ -231,37 +228,37 @@ def train_cbow_model(cbow_data, word_to_ix, output_dir, embedding_dim, learning_
     embeddings = model.embeddings.weight.data.cpu().numpy()
     save_embeddings(embeddings, output_dir)
 
-    return model, embeddings
+    return embeddings
 
 
-def get_nearest_neighbors(words, word_to_ix, ix_to_word, embeddings, n=5):
+def get_nearest_neighbors(words, word_to_idx, idx_to_word, embeddings, n=5):
     """Finds the nearest neighbors for one word or multiple words based on cosine similarity."""
     # Pokud je vstupem jedno slovo, vrať přímo výsledek pro to slovo
     if isinstance(words, str):
         word = words
-        if word not in word_to_ix:
+        if word not in word_to_idx:
             return f"Slovo '{word}' není ve slovníku."
 
-        word_ix = word_to_ix[word]
-        word_vec = embeddings[word_ix].reshape(1, -1)
+        word_idx = word_to_idx[word]
+        word_vec = embeddings[word_idx].reshape(1, -1)
 
-        other_indices = [i for i in range(embeddings.shape[0]) if i != word_ix]
+        other_indices = [i for i in range(embeddings.shape[0]) if i != word_idx]
         other_vecs = embeddings[other_indices]
 
         similarities = cosine_similarity(word_vec, other_vecs)[0]
 
         sorted_indices = np.argsort(similarities)[::-1]
-        neighbors = [(ix_to_word[other_indices[i]], similarities[i]) for i in sorted_indices[:n]]
+        neighbors = [(idx_to_word[other_indices[i]], similarities[i]) for i in sorted_indices[:n]]
         return neighbors
 
     # Pokud je vstupem seznam slov, zpracuj každé slovo postupně
     results = {}
     for word in words:
-        results[word] = get_nearest_neighbors(word, word_to_ix, ix_to_word, embeddings, n)
+        results[word] = get_nearest_neighbors(word, word_to_idx, idx_to_word, embeddings, n)
     return results
 
 
-def visualize_embeddings(embeddings, ix_to_word, output_dir, vis_embeddings_count):
+def visualize_embeddings(embeddings, idx_to_word, output_dir, vis_embeddings_count):
     sns.set_theme(style="whitegrid")
     print("Generuji t-SNE vizualizaci embeddingů...")
     tsne = TSNE(n_components=2, random_state=42, perplexity=min(30, vis_embeddings_count // 4),
@@ -285,7 +282,7 @@ def visualize_embeddings(embeddings, ix_to_word, output_dir, vis_embeddings_coun
 
     texts = []
     for i, idx in enumerate(random_indices):
-        word = ix_to_word[idx]
+        word = idx_to_word[idx]
         texts.append(plt.text(embeddings_2d[i, 0], embeddings_2d[i, 1], word, fontsize=10))
 
     # Zvýšená síla pro lepší oddělení textů
@@ -304,29 +301,29 @@ def visualize_embeddings(embeddings, ix_to_word, output_dir, vis_embeddings_coun
     plt.show()
 
 
-def save_vocab(word_to_ix, output_dir):
+def save_vocab(word_to_idx, output_dir):
     vocab_path = output_dir / "vocab.txt"
     print(f"Ukládám slovník do {vocab_path}...")
     with open(vocab_path, 'w', encoding='utf-8') as f:
-        for word, ix in word_to_ix.items():
-            f.write(f"{word}\t{ix}\n")
+        for word, idx in word_to_idx.items():
+            f.write(f"{word}\t{idx}\n")
     print(f"Slovník uložen")
 
 
 def load_vocab(output_dir):
     vocab_path = output_dir / "vocab.txt"
     print(f"Načítám slovník z {vocab_path}...")
-    word_to_ix = {}
-    ix_to_word = {}
+    word_to_idx = {}
+    idx_to_word = {}
     with open(vocab_path, 'r', encoding='utf-8') as f:
         for line in f:
-            word, ix = line.strip().split('\t')
-            ix = int(ix)
-            word_to_ix[word] = ix
-            ix_to_word[ix] = word
+            word, idx = line.strip().split('\t')
+            idx = int(idx)
+            word_to_idx[word] = idx
+            idx_to_word[idx] = word
 
-    print(f"Slovník načten, obsahuje {len(word_to_ix)} slov")
-    return word_to_ix, ix_to_word
+    print(f"Slovník načten, obsahuje {len(word_to_idx)} slov")
+    return word_to_idx, idx_to_word
 
 
 def save_embeddings(embeddings, output_dir):
@@ -367,8 +364,8 @@ def main():
     input_dir.mkdir(exist_ok=True, parents=True)
     output_dir.mkdir(exist_ok=True, parents=True)
 
-    word_to_ix = None
-    ix_to_word = None
+    word_to_idx = None
+    idx_to_word = None
     embeddings = None
     tokens = None
 
@@ -386,31 +383,31 @@ def main():
 
     if os.path.exists(vocab_path):
         print(f"Soubor {vocab_path} již existuje, načítám slovník...")
-        word_to_ix, ix_to_word = load_vocab(output_dir)
+        word_to_idx, idx_to_word = load_vocab(output_dir)
         # TODO: load tokens from this branch too
     else:
         print(f"Soubor {vocab_path} neexistuje, vytvářím slovník...")
-        word_to_ix, ix_to_word, tokens = tokenize_and_build_vocab(output_gzip_path, vocab_size, max_lines)
+        word_to_idx, idx_to_word, tokens, counts = tokenize_and_build_vocab(output_gzip_path, vocab_size, max_lines)
 
     if os.path.exists(embeddings_path) and os.path.exists(model_path):
         print(f"Soubor {embeddings_path} a {model_path} již existují, načítám embeddings...")
         embeddings = load_embeddings(output_dir)
     else:
         print(f"Soubor {embeddings_path} nebo {model_path} neexistují, trénuji model a vytvářím embeddings...")
-        cbow_data = create_cbow_training_data(tokens, word_to_ix, window_size)
-        model, embeddings = train_cbow_model(cbow_data, word_to_ix, output_dir, embedding_dim, learning_rate, epochs,
-                                             batch_size)
+        cbow_data = create_cbow_training_data(tokens, word_to_idx, window_size)
+        embeddings = train_cbow_model(cbow_data, word_to_idx, output_dir, embedding_dim, learning_rate, epochs,
+                                      batch_size)
 
     print("\n--- Vyhodnocení modelu (nejbližší sousedé) ---")
     test_words = ["muž", "žena", "král", "královna", "praha", "řeka", "pes", "kočka", "škola", "auto"]
 
-    neighbors_results = get_nearest_neighbors(test_words, word_to_ix, ix_to_word, embeddings)
+    neighbors_results = get_nearest_neighbors(test_words, word_to_idx, idx_to_word, embeddings)
 
     for word, neighbors in neighbors_results.items():
         neighbor_str = ", ".join([f"{n} ({s:.2f})" for n, s in neighbors])
         print(f"Nejbližší k '{word}': {neighbor_str}")
 
-    visualize_embeddings(embeddings, ix_to_word, output_dir, visualize_sample_count)
+    visualize_embeddings(embeddings, idx_to_word, output_dir, visualize_sample_count)
 
 
 if __name__ == "__main__":
