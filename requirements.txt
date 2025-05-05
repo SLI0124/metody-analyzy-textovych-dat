@@ -11,3 +11,5 @@ torchvision
 torchaudio
 datasets
 adjustText
+evaluate
+py7zr
