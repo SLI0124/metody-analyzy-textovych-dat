@@ -335,7 +335,8 @@ def main():
     tokenized_texts, all_tokens = load_and_preprocess_data(
         dataset_name="wikimedia/wikipedia",
         dataset_config="20231101.cs",
-        split="train[:1%]"
+        split="train[:1%]",
+        use_nltk=True
     )
 
     # Check if vocabulary exists
