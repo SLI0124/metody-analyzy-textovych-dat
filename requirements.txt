@@ -13,3 +13,5 @@ datasets
 adjustText
 evaluate
 py7zr
+scikit-learn
+seaborn
