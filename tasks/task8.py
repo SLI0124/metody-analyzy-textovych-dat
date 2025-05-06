@@ -15,7 +15,6 @@ from adjustText import adjust_text
 import random
 import nltk
 from torch.utils.data import TensorDataset, DataLoader
-import pickle
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -229,8 +228,21 @@ def create_cbow_training_data(tokens, word_to_idx, window_size=2):
 
 def prepare_training_tensors(cbow_data, batch_size=128):
     print("Preparing training data for PyTorch...")
+
+    # Check if cbow_data is empty
+    if not cbow_data or len(cbow_data) == 0:
+        print("ERROR: CBOW data is empty. No training samples available.")
+        print("Please check that the CBOW data was properly created and loaded.")
+        raise ValueError("CBOW data is empty. Cannot create DataLoader with empty dataset.")
+
+    # Print data sample for debugging
+    print(f"CBOW data contains {len(cbow_data)} samples")
+    print(f"Sample data point: {cbow_data[0]}")
+
     context_tensor = torch.tensor([item[0] for item in cbow_data], dtype=torch.long)
     target_tensor = torch.tensor([item[1] for item in cbow_data], dtype=torch.long)
+
+    print(f"Created tensors - context shape: {context_tensor.shape}, target shape: {target_tensor.shape}")
 
     dataset = TensorDataset(context_tensor, target_tensor)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -489,27 +501,23 @@ def main():
         # Uložení slovníku
         save_vocabulary(word_to_idx, output_dir)
 
-    # 2. Kontrola/vytvoření CBOW trénovacích dat
-    cbow_data_path = output_dir / "cbow_data.pkl"
-    if cbow_data_path.exists():
-        print(f"CBOW training data found at {cbow_data_path}")
-        with open(cbow_data_path, "rb") as f:
-            cbow_data = pickle.load(f)
-    else:
-        print("CBOW training data not found, creating new data...")
-        # Načtení a předzpracování dat, pokud ještě nebylo provedeno
-        if not 'all_tokens' in locals():
-            tokenized_texts, all_tokens = load_and_preprocess_data(
-                dataset_name="wikimedia/wikipedia",
-                dataset_config="20231101.cs",
-                split="train[:1%]",
-                use_nltk=True
-            )
-        # Vytvoření CBOW trénovacích dat
-        cbow_data = create_cbow_training_data(all_tokens, word_to_idx, window_size)
-        # Uložení CBOW dat
-        with open(cbow_data_path, "wb") as f:
-            pickle.dump(cbow_data, f)
+    # 2. Always create CBOW training data from scratch
+    print("Creating CBOW training data from scratch...")
+    if not all_tokens:
+        print("Loading data for CBOW creation...")
+        tokenized_texts, all_tokens = load_and_preprocess_data(
+            dataset_name="wikimedia/wikipedia",
+            dataset_config="20231101.cs",
+            split="train[:1%]",
+            use_nltk=True
+        )
+
+    # Create CBOW training data
+    cbow_data = create_cbow_training_data(all_tokens, word_to_idx, window_size)
+
+    if not cbow_data or len(cbow_data) == 0:
+        print("ERROR: Failed to create CBOW data. Exiting.")
+        return
 
     # 3. Příprava PyTorch data loaderu
     dataloader = prepare_training_tensors(cbow_data, batch_size)
