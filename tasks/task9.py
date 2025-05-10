@@ -25,7 +25,7 @@ max_input_len = 256
 max_output_len = 64
 
 # Training parameters
-total_epochs = 30
+total_epochs = 25
 batch_size = 16
 
 
@@ -117,7 +117,8 @@ def generate_square_subsequent_mask(sz):
     return mask
 
 
-def summarize(model, dialogue, tokenizer, start_token_id, device, max_len=max_output_len):
+def summarize_greedy(model, dialogue, tokenizer, start_token_id, device, max_len=max_output_len):
+    """Generuje shrnutí pomocí greedy decodingu (vybírá token s nejvyšší pravděpodobností)."""
     model.eval()
     with torch.no_grad():
         input_ids = tokenizer(
@@ -147,6 +148,111 @@ def summarize(model, dialogue, tokenizer, start_token_id, device, max_len=max_ou
 
         summary = tokenizer.decode(generated[0, 1:], skip_special_tokens=True)
         return summary
+
+
+def summarize_beam(model, dialogue, tokenizer, start_token_id, device, beam_width=3, max_len=max_output_len):
+    """Generuje shrnutí pomocí beam search algoritmu."""
+    model.eval()
+    with torch.no_grad():
+        input_ids = tokenizer(
+            dialogue,
+            return_tensors="pt",
+            max_length=max_input_len,
+            truncation=True,
+            padding="max_length"
+        )["input_ids"].to(device)
+
+        src_mask = create_pad_mask(input_ids, tokenizer.pad_token_id).bool()
+
+        # Inicializace prvního tokenu
+        generated = torch.full((1, 1), start_token_id, dtype=torch.long, device=device)
+
+        # Inicializace beam search
+        # Každý paprsek má tvar [sekvence, log_prob]
+        beams = [(generated, 0.0)]
+        finished_beams = []
+
+        # Beam search
+        for _ in range(max_len):
+            candidates = []
+
+            # Pro každý současný paprsek
+            for seq, score in beams:
+                if seq[0, -1].item() == tokenizer.eos_token_id:
+                    # Pokud sekvence končí EOS, přidáme ji mezi dokončené
+                    # Normalizace skóre podle délky
+                    normalized_score = score / (seq.size(1) - 1)  # -1 kvůli start tokenu
+                    finished_beams.append((seq, normalized_score))
+                    continue
+
+                # Předpovíme další token
+                tgt_mask = generate_square_subsequent_mask(seq.size(1)).to(device)
+                out = model(
+                    input_ids, seq,
+                    src_key_padding_mask=src_mask,
+                    tgt_key_padding_mask=create_pad_mask(seq, tokenizer.pad_token_id).bool(),
+                    tgt_mask=tgt_mask
+                )
+
+                # Získáme logity pro poslední token
+                logits = out[:, -1, :]
+
+                # Aplikujeme log_softmax pro získání log pravděpodobností
+                log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
+
+                # Získáme top_k nejpravděpodobnějších tokenů
+                topk_log_probs, topk_indices = log_probs.topk(beam_width, dim=-1)
+
+                # Pro každý token v top_k
+                for i in range(beam_width):
+                    token_id = topk_indices[0, i].unsqueeze(0).unsqueeze(0)
+                    token_log_prob = topk_log_probs[0, i].item()
+
+                    # Vytvoříme novou sekvenci přidáním tokenu
+                    new_seq = torch.cat([seq, token_id], dim=1)
+
+                    # Aktualizujeme skóre (součet log pravděpodobností)
+                    new_score = score + token_log_prob
+
+                    # Přidáme nového kandidáta
+                    candidates.append((new_seq, new_score))
+
+            # Pokud všechny paprsky skončily, ukončíme generování
+            if not candidates:
+                break
+
+            # Seřadíme kandidáty podle skóre
+            candidates.sort(key=lambda x: x[1], reverse=True)
+
+            # Vybereme top beam_width kandidátů jako nové paprsky
+            beams = candidates[:beam_width]
+
+        # Přidáme nedokončené paprsky mezi dokončené
+        for seq, score in beams:
+            # Normalizace skóre podle délky
+            normalized_score = score / (seq.size(1) - 1)  # -1 kvůli start tokenu
+            finished_beams.append((seq, normalized_score))
+
+        # Seřadíme dokončené paprsky podle skóre
+        finished_beams.sort(key=lambda x: x[1], reverse=True)
+
+        # Vybereme nejlepší sekvenci
+        best_seq = finished_beams[0][0] if finished_beams else generated
+
+        # Dekódujeme ji
+        summary = tokenizer.decode(best_seq[0, 1:], skip_special_tokens=True)
+        return summary
+
+
+def summarize(model, dialogue, tokenizer, start_token_id, device, method="greedy", beam_width=3,
+              max_len=max_output_len):
+    """Wrapper funkce pro generování shrnutí pomocí různých metod."""
+    if method == "greedy":
+        return summarize_greedy(model, dialogue, tokenizer, start_token_id, device, max_len)
+    elif method == "beam":
+        return summarize_beam(model, dialogue, tokenizer, start_token_id, device, beam_width, max_len)
+    else:
+        raise ValueError(f"Neznámá metoda dekódování: {method}")
 
 
 def train_epoch(model, device, train_loader, optimizer, criterion, tokenizer, vocab_size, epoch, total_epochs):
@@ -186,7 +292,8 @@ def train_epoch(model, device, train_loader, optimizer, criterion, tokenizer, vo
     return epoch_loss / len(train_loader)
 
 
-def validate(model, device, valid_loader, criterion, tokenizer, start_token_id, vocab_size, epoch, total_epochs):
+def validate(model, device, valid_loader, criterion, tokenizer, start_token_id, vocab_size, epoch, total_epochs,
+             decoding_method="greedy", beam_width=3):
     model.eval()
     val_loss = 0
     val_rouge_scores = []
@@ -219,7 +326,8 @@ def validate(model, device, valid_loader, criterion, tokenizer, start_token_id, 
             for i in range(src.size(0)):
                 dialogue = tokenizer.decode(src[i], skip_special_tokens=True)
                 reference = tokenizer.decode(tgt_output[i], skip_special_tokens=True)
-                prediction = summarize(model, dialogue, tokenizer, start_token_id, device)
+                prediction = summarize(model, dialogue, tokenizer, start_token_id, device, method=decoding_method,
+                                       beam_width=beam_width)
                 score = scorer.score(reference, prediction)
                 val_rouge_scores.append(score)
 
@@ -229,7 +337,8 @@ def validate(model, device, valid_loader, criterion, tokenizer, start_token_id, 
     return val_loss, rouge1_f
 
 
-def train(model, device, train_loader, valid_loader, tokenizer, start_token_id, vocab_size, epochs):
+def train(model, device, train_loader, valid_loader, tokenizer, start_token_id, vocab_size, epochs,
+          decoding_method="greedy", beam_width=3):
     output_dir = os.path.join("..", "output", "task9")
     os.makedirs(output_dir, exist_ok=True)
 
@@ -237,7 +346,7 @@ def train(model, device, train_loader, valid_loader, tokenizer, start_token_id, 
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
     best_rouge1 = float('-inf')
-    best_model_path = os.path.join(output_dir, "transformer_summarizer_best.pth")
+    best_model_path = os.path.join(output_dir, f"transformer_summarizer_best_{decoding_method}.pth")
 
     for epoch in range(epochs):
         # Trénovací fáze
@@ -245,7 +354,7 @@ def train(model, device, train_loader, valid_loader, tokenizer, start_token_id, 
 
         # Validační fáze
         val_loss, rouge1_f = validate(model, device, valid_loader, criterion, tokenizer, start_token_id, vocab_size,
-                                      epoch, epochs)
+                                      epoch, epochs, decoding_method, beam_width)
 
         print(f"Epoch {epoch + 1}/{epochs} - Train loss: {avg_loss:.4f}, Val loss: {val_loss:.4f}, "
               f"ROUGE-1: {rouge1_f:.4f}")
@@ -257,37 +366,40 @@ def train(model, device, train_loader, valid_loader, tokenizer, start_token_id, 
             print(f"Best model saved to {best_model_path} (val_rouge1={rouge1_f:.4f})")
 
     # Uložení posledního modelu
-    model_save_path = os.path.join(output_dir, "transformer_summarizer_last.pth")
+    model_save_path = os.path.join(output_dir, f"transformer_summarizer_last_{decoding_method}.pth")
     torch.save(model.state_dict(), model_save_path)
     print(f"Model saved to {model_save_path}")
 
     return model
 
 
-def evaluate(model, test_data, tokenizer, start_token_id, device, num_examples=20, display=10):
+def evaluate(model, test_data, tokenizer, start_token_id, device, decoding_method="greedy", beam_width=3,
+             num_examples=20, display=10):
     scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2'], use_stemmer=True)
     scores = []
 
-    for i in tqdm(range(num_examples), desc="Evaluating best model", leave=False):
+    for i in tqdm(range(num_examples), desc=f"Evaluating model (method={decoding_method})", leave=False):
         dialog = test_data[i]["dialogue"]
         ref = test_data[i]["summary"]
-        pred = summarize(model, dialog, tokenizer, start_token_id, device)
+        pred = summarize(model, dialog, tokenizer, start_token_id, device, method=decoding_method,
+                         beam_width=beam_width)
         score = scorer.score(ref, pred)
         scores.append(score)
 
     rouge1 = np.mean([s["rouge1"].fmeasure for s in scores])
     rouge2 = np.mean([s["rouge2"].fmeasure for s in scores])
-    print("Výsledky ROUGE na testovacích datech:")
+    print(f"Výsledky ROUGE na testovacích datech (metoda: {decoding_method}):")
     print(f"ROUGE-1: {rouge1:.3f}, ROUGE-2: {rouge2:.3f}")
 
-    print("\n--- Ukázky predikcí modelu ---")
+    print(f"\n--- Ukázky predikcí modelu (metoda: {decoding_method}) ---")
     for i in range(display):
         dialog = test_data[i]["dialogue"]
         ref = test_data[i]["summary"]
-        pred = summarize(model, dialog, tokenizer, start_token_id, device)
+        pred = summarize(model, dialog, tokenizer, start_token_id, device, method=decoding_method,
+                         beam_width=beam_width)
         print(f"\nDialog:\n{dialog}\n")
         print(f"Reference:\n{ref}\n")
-        print(f"Predikce:\n{pred}\n")
+        print(f"Predikce ({decoding_method}):\n{pred}\n")
 
 
 def main():
@@ -308,11 +420,30 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
 
-    # Trénování modelu
-    model = train(model, device, train_loader, valid_loader, tokenizer, start_token_id, vocab_size, total_epochs)
+    # Nastavení dekódování
+    decoding_method = "greedy"  # Možnosti: "greedy" nebo "beam"
+    # decoding_method = "beam"
+    beam_width = 3
+
+    # Trénování nebo načtení modelu
+    output_dir = os.path.join("..", "output", "task9")
+    model_path = os.path.join(output_dir, f"transformer_summarizer_best_{decoding_method}.pth")
+    if os.path.exists(model_path):
+        print(f"Načítám existující model z {model_path}")
+        model.load_state_dict(torch.load(model_path, map_location=device))
+    else:
+        print(f"Trénuji nový model (metoda dekódování: {decoding_method})...")
+        model = train(model, device, train_loader, valid_loader, tokenizer, start_token_id, vocab_size,
+                      total_epochs, decoding_method, beam_width)
 
     # Vyhodnocení modelu
-    evaluate(model, test_data, tokenizer, start_token_id, device)
+    print("\n\033[94m--- Vyhodnocení pomocí greedy search ---\033[0m")
+    evaluate(model, test_data, tokenizer, start_token_id, device,
+             decoding_method="greedy")
+
+    print("\n\033[94m--- Vyhodnocení pomocí beam search ---\033[0m")
+    evaluate(model, test_data, tokenizer, start_token_id, device,
+             decoding_method="beam", beam_width=beam_width)
 
 
 if __name__ == "__main__":
