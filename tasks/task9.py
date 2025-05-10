@@ -7,6 +7,7 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 from tqdm import tqdm
 import numpy as np
+import os
 
 torch.manual_seed(42)
 np.random.seed(42)
@@ -115,8 +116,13 @@ criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 valid_loader = DataLoader(valid_dataset, batch_size=16, shuffle=False)
 
+# Vytvoření adresáře pro výstupy, pokud neexistuje
+output_dir = os.path.join("..", "output", "task9")
+os.makedirs(output_dir, exist_ok=True)
+
 best_loss = float("inf")
 epochs = 30
+best_model_path = os.path.join(output_dir, "transformer_summarizer_best.pth")
 
 for epoch in range(epochs):
     model.train()
@@ -173,6 +179,12 @@ for epoch in range(epochs):
     val_loss /= len(valid_loader)
     print(f"Validation loss: {val_loss:.4f}")
 
+    # Uložení nejlepšího modelu (checkpoint)
+    if val_loss < best_loss:
+        best_loss = val_loss
+        torch.save(model.state_dict(), best_model_path)
+        print(f"Best model saved to {best_model_path} (val_loss={val_loss:.4f})")
+
 
 def summarize(dialogue, max_len=max_output_len):
     model.eval()
@@ -221,7 +233,7 @@ for i in range(10):
     print(f"Reference:\n{ref}\n")
     print(f"Predikce:\n{pred}\n")
 
-# Save the trained model
-model_save_path = "transformer_summarizer.pth"
+# Save the trained model (poslední stav po všech epochách)
+model_save_path = os.path.join(output_dir, "transformer_summarizer_last.pth")
 torch.save(model.state_dict(), model_save_path)
 print(f"Model saved to {model_save_path}")
