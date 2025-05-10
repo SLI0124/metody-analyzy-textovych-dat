@@ -12,14 +12,24 @@ import os
 torch.manual_seed(42)
 np.random.seed(42)
 
+# Model parameters
+d_model = 384
+nhead = 6
+num_encoder_layers = 4
+num_decoder_layers = 4
+dim_feedforward = 1024
+dropout = 0.1
+
+# Sequence lengths
+max_input_len = 256
+max_output_len = 64
+
 dataset = load_dataset("samsum")
 train_data = dataset["train"]
 valid_data = dataset["validation"]
 test_data = dataset["test"]
 
 tokenizer = AutoTokenizer.from_pretrained("facebook/bart-base")
-max_input_len = 192
-max_output_len = 48
 
 print("BOS token id:", tokenizer.bos_token_id)
 print("EOS token id:", tokenizer.eos_token_id)
@@ -65,8 +75,8 @@ test_dataset = SamsumDataset(test_data)
 
 
 class TransformerSummarizer(nn.Module):
-    def __init__(self, vocab_size, d_model=384, nhead=6, num_encoder_layers=4, num_decoder_layers=4,
-                 dim_feedforward=1024, dropout=0.2):
+    def __init__(self, vocab_size, d_model=d_model, nhead=nhead, num_encoder_layers=num_encoder_layers,
+                 num_decoder_layers=num_decoder_layers, dim_feedforward=dim_feedforward, dropout=dropout):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.emb_dropout = nn.Dropout(dropout)
@@ -107,6 +117,31 @@ def generate_square_subsequent_mask(sz):
     return mask
 
 
+def summarize(dialogue, max_len=max_output_len):
+    model.eval()
+    with torch.no_grad():
+        input_ids = \
+            tokenizer(dialogue, return_tensors="pt", max_length=max_input_len, truncation=True, padding="max_length")[
+                "input_ids"].to(device)
+        src_mask = create_pad_mask(input_ids, tokenizer.pad_token_id).bool()
+        generated = torch.full((1, 1), start_token_id, dtype=torch.long, device=device)
+        for _ in range(max_len):
+            tgt_mask = generate_square_subsequent_mask(generated.size(1)).to(device)
+            out = model(
+                input_ids, generated,
+                src_key_padding_mask=src_mask,
+                tgt_key_padding_mask=create_pad_mask(generated, tokenizer.pad_token_id).bool(),
+                tgt_mask=tgt_mask
+            )
+            logits = out[:, -1, :]
+            next_token = logits.argmax(-1, keepdim=True)
+            generated = torch.cat([generated, next_token], dim=1)
+            if next_token.item() == tokenizer.eos_token_id:
+                break
+        summary = tokenizer.decode(generated[0, 1:], skip_special_tokens=True)
+        return summary
+
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 vocab_size = tokenizer.vocab_size
 model = TransformerSummarizer(vocab_size).to(device)
@@ -120,8 +155,9 @@ valid_loader = DataLoader(valid_dataset, batch_size=16, shuffle=False)
 output_dir = os.path.join("..", "output", "task9")
 os.makedirs(output_dir, exist_ok=True)
 
-best_loss = float("inf")
-epochs = 30
+scorer = rouge_scorer.RougeScorer(['rouge1'], use_stemmer=True)
+epochs = 20
+best_rouge1 = 0.0
 best_model_path = os.path.join(output_dir, "transformer_summarizer_best.pth")
 
 for epoch in range(epochs):
@@ -158,6 +194,7 @@ for epoch in range(epochs):
     # Validation step
     model.eval()
     val_loss = 0
+    val_rouge_scores = []
     with torch.no_grad():
         for batch in valid_loader:
             src = batch["input_ids"].to(device)
@@ -176,40 +213,25 @@ for epoch in range(epochs):
             loss = criterion(logits.reshape(-1, vocab_size), tgt_output.reshape(-1))
             val_loss += loss.item()
 
+            # ROUGE evaluation
+            for i in range(src.size(0)):
+                dialogue = tokenizer.decode(src[i], skip_special_tokens=True)
+                reference = tokenizer.decode(tgt_output[i], skip_special_tokens=True)
+                prediction = summarize(dialogue)
+                score = scorer.score(reference, prediction)
+                val_rouge_scores.append(score)
+
     val_loss /= len(valid_loader)
+    rouge1_f = np.mean([s["rouge1"].fmeasure for s in val_rouge_scores])
+
     print(f"Validation loss: {val_loss:.4f}")
+    print(f"Validation ROUGE-1: {rouge1_f:.4f}")
 
-    # Uložení nejlepšího modelu (checkpoint)
-    if val_loss < best_loss:
-        best_loss = val_loss
+    # Save the best model based on ROUGE-1
+    if rouge1_f > best_rouge1:
+        best_rouge1 = rouge1_f
         torch.save(model.state_dict(), best_model_path)
-        print(f"Best model saved to {best_model_path} (val_loss={val_loss:.4f})")
-
-
-def summarize(dialogue, max_len=max_output_len):
-    model.eval()
-    with torch.no_grad():
-        input_ids = \
-            tokenizer(dialogue, return_tensors="pt", max_length=max_input_len, truncation=True, padding="max_length")[
-                "input_ids"].to(device)
-        src_mask = create_pad_mask(input_ids, tokenizer.pad_token_id).bool()
-        generated = torch.full((1, 1), start_token_id, dtype=torch.long, device=device)
-        for _ in range(max_len):
-            tgt_mask = generate_square_subsequent_mask(generated.size(1)).to(device)
-            out = model(
-                input_ids, generated,
-                src_key_padding_mask=src_mask,
-                tgt_key_padding_mask=create_pad_mask(generated, tokenizer.pad_token_id).bool(),
-                tgt_mask=tgt_mask
-            )
-            logits = out[:, -1, :]
-            next_token = logits.argmax(-1, keepdim=True)
-            generated = torch.cat([generated, next_token], dim=1)
-            if next_token.item() == tokenizer.eos_token_id:
-                break
-        summary = tokenizer.decode(generated[0, 1:], skip_special_tokens=True)
-        return summary
-
+        print(f"Best model saved to {best_model_path} (val_rouge1={rouge1_f:.4f})")
 
 scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2'], use_stemmer=True)
 scores = []
