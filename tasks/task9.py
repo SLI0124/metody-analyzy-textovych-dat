@@ -25,7 +25,7 @@ max_input_len = 256
 max_output_len = 64
 
 # Training parameters
-total_epochs = 20
+total_epochs = 30
 batch_size = 16
 
 
