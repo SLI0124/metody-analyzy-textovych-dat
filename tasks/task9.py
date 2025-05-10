@@ -24,7 +24,9 @@ dropout = 0.1
 max_input_len = 256
 max_output_len = 64
 
-total_epochs = 30
+# Training parameters
+total_epochs = 20
+batch_size = 16
 
 
 def load_data():
@@ -34,8 +36,6 @@ def load_data():
     test_data = dataset["test"]
 
     tokenizer = AutoTokenizer.from_pretrained("facebook/bart-base")
-    print("BOS token id:", tokenizer.bos_token_id)
-    print("EOS token id:", tokenizer.eos_token_id)
     start_token_id = tokenizer.bos_token_id if tokenizer.bos_token_id is not None else tokenizer.eos_token_id
 
     return dataset, train_data, valid_data, test_data, tokenizer, start_token_id
@@ -149,12 +149,12 @@ def summarize(model, dialogue, tokenizer, start_token_id, device, max_len=max_ou
         return summary
 
 
-def train_epoch(model, device, train_loader, optimizer, criterion, tokenizer, vocab_size):
+def train_epoch(model, device, train_loader, optimizer, criterion, tokenizer, vocab_size, epoch, total_epochs):
     model.train()
     epoch_loss = 0
     batch_losses = []
 
-    pbar = tqdm(train_loader)
+    pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{total_epochs} [Training]")
     for i, batch in enumerate(pbar):
         src = batch["input_ids"].to(device)
         tgt = batch["labels"].to(device)
@@ -186,14 +186,15 @@ def train_epoch(model, device, train_loader, optimizer, criterion, tokenizer, vo
     return epoch_loss / len(train_loader)
 
 
-def validate(model, device, valid_loader, criterion, tokenizer, start_token_id, vocab_size):
+def validate(model, device, valid_loader, criterion, tokenizer, start_token_id, vocab_size, epoch, total_epochs):
     model.eval()
     val_loss = 0
     val_rouge_scores = []
     scorer = rouge_scorer.RougeScorer(['rouge1'], use_stemmer=True)
 
     with torch.no_grad():
-        for batch in tqdm(valid_loader, desc="Validating", leave=False):
+        pbar = tqdm(valid_loader, desc=f"Epoch {epoch + 1}/{total_epochs} [Validating]", leave=False)
+        for batch in pbar:
             src = batch["input_ids"].to(device)
             tgt = batch["labels"].to(device)
             tgt_input = tgt[:, :-1]
@@ -212,6 +213,7 @@ def validate(model, device, valid_loader, criterion, tokenizer, start_token_id, 
 
             loss = criterion(logits.reshape(-1, vocab_size), tgt_output.reshape(-1))
             val_loss += loss.item()
+            pbar.set_postfix(loss=loss.item())
 
             # ROUGE evaluation
             for i in range(src.size(0)):
@@ -239,13 +241,14 @@ def train(model, device, train_loader, valid_loader, tokenizer, start_token_id, 
 
     for epoch in range(epochs):
         # Trénovací fáze
-        avg_loss = train_epoch(model, device, train_loader, optimizer, criterion, tokenizer, vocab_size)
-        print(f"\nEpoch {epoch + 1} avg loss: {avg_loss:.4f}")
+        avg_loss = train_epoch(model, device, train_loader, optimizer, criterion, tokenizer, vocab_size, epoch, epochs)
 
         # Validační fáze
-        val_loss, rouge1_f = validate(model, device, valid_loader, criterion, tokenizer, start_token_id, vocab_size)
-        print(f"Validation loss: {val_loss:.4f}")
-        print(f"Validation ROUGE-1: {rouge1_f:.4f}")
+        val_loss, rouge1_f = validate(model, device, valid_loader, criterion, tokenizer, start_token_id, vocab_size,
+                                      epoch, epochs)
+
+        print(f"Epoch {epoch + 1}/{epochs} - Train loss: {avg_loss:.4f}, Val loss: {val_loss:.4f}, "
+              f"ROUGE-1: {rouge1_f:.4f}")
 
         # Uložení nejlepšího modelu podle ROUGE-1
         if rouge1_f > best_rouge1:
@@ -274,6 +277,7 @@ def evaluate(model, test_data, tokenizer, start_token_id, device, num_examples=2
 
     rouge1 = np.mean([s["rouge1"].fmeasure for s in scores])
     rouge2 = np.mean([s["rouge2"].fmeasure for s in scores])
+    print("Výsledky ROUGE na testovacích datech:")
     print(f"ROUGE-1: {rouge1:.3f}, ROUGE-2: {rouge2:.3f}")
 
     print("\n--- Ukázky predikcí modelu ---")
@@ -301,8 +305,8 @@ def main():
     model = TransformerSummarizer(vocab_size).to(device)
 
     # Příprava dataloaderů
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=16, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
 
     # Trénování modelu
     model = train(model, device, train_loader, valid_loader, tokenizer, start_token_id, vocab_size, total_epochs)
