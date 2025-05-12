@@ -421,8 +421,9 @@ def visualize_embeddings(embeddings, idx_to_word, output_dir=None, sample_count=
     print("Generating t-SNE visualization of embeddings...")
 
     vocab_size = embeddings.shape[0]
-    random_indices = random.sample(range(vocab_size), min(sample_count, vocab_size))
-    selected_embeddings = embeddings[random_indices]
+    # Použijeme prvních sample_count indexů místo náhodného vzorkování
+    selected_indices = list(range(min(sample_count, vocab_size)))
+    selected_embeddings = embeddings[selected_indices]
 
     # Normalizace embeddingů pro lepší stabilitu t-SNE
     selected_embeddings = selected_embeddings / np.linalg.norm(selected_embeddings, axis=1, keepdims=True)
@@ -440,7 +441,7 @@ def visualize_embeddings(embeddings, idx_to_word, output_dir=None, sample_count=
     plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], alpha=0.6, s=15)
 
     texts = []
-    for i, idx in enumerate(random_indices):
+    for i, idx in enumerate(selected_indices):
         word = idx_to_word[idx]
         texts.append(plt.text(embeddings_2d[i, 0], embeddings_2d[i, 1], word, fontsize=10))
 
@@ -451,7 +452,7 @@ def visualize_embeddings(embeddings, idx_to_word, output_dir=None, sample_count=
                 expand_text=(1.2, 1.2),
                 expand_points=(1.2, 1.2))
 
-    plt.title("t-SNE visualization of randomly selected embeddings", fontsize=14)
+    plt.title("t-SNE visualization of first " + str(len(selected_indices)) + " embeddings", fontsize=14)
     plt.tight_layout()
 
     if output_dir:
