@@ -45,29 +45,132 @@ class CBOW_Scratch:
 
         return probs, mean_embedding
 
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-np.clip(x, -15, 15)))
+
+    def sample_negative_words(self, target_idx, num_negatives=5):
+        negative_indices = []
+        while len(negative_indices) < num_negatives:
+            idx = np.random.randint(0, self.vocab_size)
+            if idx != target_idx and idx not in negative_indices:
+                negative_indices.append(idx)
+        return negative_indices
+
+    def train_negative_sampling(self, training_data, epochs=5, learning_rate=0.01, batch_size=128, num_negatives=10):
+        losses = []
+
+        for epoch in range(epochs):
+            total_loss = 0
+            random.shuffle(training_data)
+
+            progress_bar = tqdm(range(0, len(training_data), batch_size),
+                                desc=f"Epoch {epoch + 1}/{epochs}")
+
+            for i in progress_bar:
+                batch = training_data[i:i + batch_size]
+                batch_loss = 0
+
+                for context_indices, target_idx in batch:
+                    # Get mean embedding for context
+                    context_embeddings = self.embedding_matrix[context_indices]
+                    mean_embedding = np.mean(context_embeddings, axis=0)
+
+                    # Sample negative words
+                    negative_indices = self.sample_negative_words(target_idx, num_negatives)
+
+                    # Calculate score for target word
+                    target_score = np.dot(mean_embedding,
+                                          self.output_weights[target_idx]) + self.output_bias[target_idx]
+                    target_sigmoid = self.sigmoid(target_score)
+
+                    # Calculate scores for negative words
+                    negative_scores = np.array([np.dot(mean_embedding, self.output_weights[neg_idx]) +
+                                               self.output_bias[neg_idx] for neg_idx in negative_indices])
+                    negative_sigmoid = self.sigmoid(-negative_scores)  # Negative samples should have low scores
+
+                    # Calculate loss
+                    loss = -np.log(target_sigmoid + 1e-10) - np.sum(np.log(negative_sigmoid + 1e-10))
+                    batch_loss += loss
+
+                    # Calculate gradients
+                    # For target word
+                    d_target = target_sigmoid - 1  # target should be 1
+                    d_output_weights_target = d_target * mean_embedding
+                    d_output_bias_target = d_target
+
+                    # For negative words
+                    d_negative = 1 - negative_sigmoid  # negative should be 0
+                    d_output_weights_negative = np.outer(d_negative, mean_embedding)
+
+                    # Gradient for mean embedding
+                    d_mean_embedding = d_target * self.output_weights[target_idx]
+                    for k, neg_idx in enumerate(negative_indices):
+                        d_mean_embedding += d_negative[k] * self.output_weights[neg_idx]
+
+                    # Update weights with gradient clipping
+                    # Update target word weights
+                    self.output_weights[target_idx] -= learning_rate * np.clip(d_output_weights_target, -5.0, 5.0)
+                    self.output_bias[target_idx] -= learning_rate * np.clip(d_output_bias_target, -5.0, 5.0)
+
+                    # Update negative word weights
+                    for k, neg_idx in enumerate(negative_indices):
+                        d_output_weight_neg = d_negative[k] * mean_embedding
+                        d_output_bias_neg = d_negative[k]
+                        self.output_weights[neg_idx] -= learning_rate * np.clip(d_output_weight_neg, -5.0, 5.0)
+                        self.output_bias[neg_idx] -= learning_rate * np.clip(d_output_bias_neg, -5.0, 5.0)
+
+                    # Update embeddings for context words
+                    d_mean_embedding_clipped = np.clip(d_mean_embedding, -5.0, 5.0)
+                    for idx in context_indices:
+                        self.embedding_matrix[idx] -= learning_rate * d_mean_embedding_clipped / len(context_indices)
+
+                # Update progress bar with current loss
+                avg_batch_loss = batch_loss / len(batch)
+                total_loss += batch_loss
+                progress_bar.set_postfix(loss=f"{avg_batch_loss:.4f}")
+
+            avg_epoch_loss = total_loss / len(training_data)
+            losses.append(avg_epoch_loss)
+            print(f"Epoch {epoch + 1}/{epochs}, Average loss: {avg_epoch_loss:.4f}")
+
+        return losses
+
     def backward(self, context_indices, target_index, probs, mean_embedding, learning_rate):
-        # Calculate gradient of loss with respect to z
+        # Standard full-vocabulary update (not used when training with negative sampling)
+        # Calculate gradient of loss with respect to z (cross-entropy loss gradient)
         dz = probs.copy()
-        dz[target_index] -= 1
+        dz[target_index] -= 1  # dL/dz for target word
 
         # Update output weights and bias
-        dw_output = np.outer(dz, mean_embedding)
-        db_output = dz.copy()
+        dw_output = np.outer(dz, mean_embedding)  # dL/dW
+        db_output = dz.copy()  # dL/db
 
         # Gradient of loss with respect to mean embedding
-        d_mean_embedding = np.dot(self.output_weights.T, dz)
+        d_mean_embedding = np.dot(self.output_weights.T, dz)  # dL/dmean_emb
 
         # Distribute gradient equally to all context words
-        d_context = d_mean_embedding / len(context_indices)
+        d_context = d_mean_embedding / len(context_indices)  # dL/demb for each context word
 
-        # Update embedding matrix
+        # Normalize learning rate by context size for more stable updates
+        effective_lr = learning_rate / np.sqrt(len(context_indices))
+
+        # Update embedding matrix with gradient clipping for numerical stability
+        # This prevents large updates that can lead to poor embeddings
+        d_context_clipped = np.clip(d_context, -5.0, 5.0)
         for idx in context_indices:
-            self.embedding_matrix[idx] -= learning_rate * d_context
+            self.embedding_matrix[idx] -= effective_lr * d_context_clipped
 
-        self.output_weights -= learning_rate * dw_output
-        self.output_bias -= learning_rate * db_output
+        # Apply gradient clipping to output weight updates too
+        dw_output_clipped = np.clip(dw_output, -5.0, 5.0)
+        db_output_clipped = np.clip(db_output, -5.0, 5.0)
+
+        # Update output weights and bias
+        self.output_weights -= effective_lr * dw_output_clipped
+        self.output_bias -= effective_lr * db_output_clipped
 
     def train(self, training_data, epochs=5, learning_rate=0.01, batch_size=128):
+        # This method is kept for compatibility but we recommend using train_negative_sampling
+        print("Warning: Using full-vocabulary training. Consider using train_negative_sampling instead for better efficiency.")
         losses = []
 
         for epoch in range(epochs):
@@ -75,7 +178,6 @@ class CBOW_Scratch:
             random.shuffle(training_data)
 
             # Process in batches
-            # Vylepšený tqdm s výpisem ztráty během tréninku
             progress_bar = tqdm(range(0, len(training_data), batch_size),
                                 desc=f"Epoch {epoch + 1}/{epochs}")
 
@@ -104,7 +206,7 @@ class CBOW_Scratch:
                 batch_loss = -np.sum(np.log(probs[np.arange(len(batch)), targets] + 1e-10)) / len(batch)
                 total_loss += batch_loss * len(batch)
 
-                # Aktualizace tqdm s aktuální hodnotou ztráty
+                # Update tqdm with current loss value
                 progress_bar.set_postfix(loss=f"{batch_loss:.4f}")
 
                 # Backward pass
@@ -118,6 +220,10 @@ class CBOW_Scratch:
                 # Gradient for embeddings
                 d_mean_embedding = np.dot(dz, self.output_weights) / len(batch)
 
+                # Apply gradient clipping to weights and bias
+                dw_output = np.clip(dw_output, -5.0, 5.0)
+                db_output = np.clip(db_output, -5.0, 5.0)
+
                 # Update parameters
                 self.output_weights -= learning_rate * dw_output
                 self.output_bias -= learning_rate * db_output
@@ -125,6 +231,8 @@ class CBOW_Scratch:
                 # Update embeddings (this part is trickier to vectorize completely)
                 for j, context in enumerate(contexts):
                     d_context = d_mean_embedding[j] / len(context)
+                    # Apply gradient clipping
+                    d_context = np.clip(d_context, -5.0, 5.0)
                     self.embedding_matrix[context] -= learning_rate * d_context
 
             avg_epoch_loss = total_loss / len(training_data)
@@ -138,10 +246,10 @@ class CBOW_Scratch:
 
 
 def train_cbow_model_from_scratch(training_data, vocab_size, embedding_dim=100,
-                                  learning_rate=0.01, epochs=5, batch_size=128):
-    print("Training CBOW model from scratch...")
+                                  learning_rate=0.01, epochs=5, batch_size=128, num_negatives=20):
+    print("Training CBOW model from scratch using negative sampling...")
     model = CBOW_Scratch(vocab_size, embedding_dim)
-    losses = model.train(training_data, epochs, learning_rate, batch_size)
+    losses = model.train_negative_sampling(training_data, epochs, learning_rate, batch_size, num_negatives)
     embeddings = model.get_embeddings()
     return model, embeddings, losses
 
@@ -174,7 +282,7 @@ def load_and_preprocess_data(dataset_name="wikimedia/wikipedia", dataset_config=
             cleaned_tokens = []
             for token in tokens:
                 token = clean_token(token).lower()
-                if token and token.isalpha():
+                if token and token.isalpha() and len(token) > 2:
                     cleaned_tokens.append(token)
             tokenized_texts.append(cleaned_tokens)
             all_tokens.extend(cleaned_tokens)
@@ -254,44 +362,79 @@ class CBOW_PyTorch(nn.Module):
     def __init__(self, vocab_size, embedding_dim):
         super(CBOW_PyTorch, self).__init__()
         self.embeddings = nn.Embedding(vocab_size, embedding_dim)
-        self.linear = nn.Linear(embedding_dim, vocab_size)
+        self.output_layer = nn.Linear(embedding_dim, vocab_size)
+
+        self.vocab_size = vocab_size
+        self.embedding_dim = embedding_dim
 
     def forward(self, context_indices):
-        # Získání embedingů pro kontextová slova
-        context_embeddings = self.embeddings(context_indices)
-        # Průměrování embeddingů kontextu
-        mean_embeddings = torch.mean(context_embeddings, dim=1)
-        # Lineární transformace a predikce
-        out = self.linear(mean_embeddings)
-        return out
+        # Získání embeddingů pro kontextová slova
+        context_embeddings = self.embeddings(context_indices)  # [batch_size, context_size, emb_dim]
+        # Zprůměrování embeddingů kontextu
+        mean_embeddings = torch.mean(context_embeddings, dim=1)  # [batch_size, emb_dim]
+        # Finální predikce
+        logits = self.output_layer(mean_embeddings)  # [batch_size, vocab_size]
+        return logits
+
+    def get_embeddings(self):
+        return self.embeddings.weight.data
 
 
 def train_cbow_model(dataloader, vocab_size, embedding_dim=100, learning_rate=0.01,
-                     epochs=5, output_dir=None):
+                     epochs=5, output_dir=None, num_negatives=10):
+    # Výpis informace o použitém zařízení
     print(f"Using device: {DEVICE}")
     model = CBOW_PyTorch(vocab_size, embedding_dim).to(DEVICE)
-    loss_function = nn.CrossEntropyLoss()
+
+    # Definice kritéria a optimizéru
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     model.train()
-    print("Starting training...")
+    print(f"Starting training with negative sampling...")
     losses = []
 
     for epoch in range(epochs):
         total_loss = 0
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}")
         for context_batch, target_batch in progress_bar:
+            # Přesun dat na GPU, pokud je dostupná
             context_batch = context_batch.to(DEVICE)
             target_batch = target_batch.to(DEVICE)
 
+            # Dopředný průchod
             optimizer.zero_grad()
-            log_probs = model(context_batch)
-            loss = loss_function(log_probs, target_batch)
+            outputs = model(context_batch)
+
+            # Výpočet standardní cross-entropy ztráty
+            loss = criterion(outputs, target_batch)
+
+            # Přidání negativního samplování, pokud je požadováno
+            if num_negatives > 0:
+                batch_size = context_batch.size(0)
+                # Vytvoření náhodných negativních příkladů
+                noise_targets = torch.randint(0, vocab_size, (batch_size,), device=DEVICE)
+                # Zajištění, že negativní příklady jsou odlišné od cílů
+                same_mask = noise_targets == target_batch
+                if same_mask.any():
+                    noise_targets[same_mask] = (noise_targets[same_mask] + 1) % vocab_size
+
+                # Výpočet ztráty pro negativní příklady
+                noise_loss = -torch.mean(torch.log(1 - torch.softmax(outputs, dim=1).gather(1,
+                                         noise_targets.unsqueeze(1)).squeeze()))
+
+                # Kombinace ztrát s váhami
+                loss = loss * 0.8 + noise_loss * 0.2
+
+            # Zpětný průchod
             loss.backward()
+
+            # Aktualizace parametrů
             optimizer.step()
 
-            total_loss += loss.item()
-            progress_bar.set_postfix({'loss': loss.item()})
+            batch_loss = loss.item()
+            total_loss += batch_loss
+            progress_bar.set_postfix({'loss': batch_loss})
 
         avg_loss = total_loss / len(dataloader)
         losses.append(avg_loss)
@@ -299,8 +442,10 @@ def train_cbow_model(dataloader, vocab_size, embedding_dim=100, learning_rate=0.
 
     print("Training completed.")
 
-    embeddings = model.embeddings.weight.data.cpu().numpy()
+    # Získání natrénovaných embeddingů
+    embeddings = model.get_embeddings().cpu().numpy()
 
+    # Uložení výsledků, pokud je zadaný výstupní adresář
     if output_dir:
         save_model(model, output_dir)
         save_embeddings(embeddings, output_dir)
@@ -397,10 +542,18 @@ def get_nearest_neighbors(word, word_to_idx, idx_to_word, embeddings, n=5):
     word_idx = word_to_idx[word]
     word_vec = embeddings[word_idx].reshape(1, -1)
 
+    # Normalizace vektoru slova pro lepší výpočet podobnosti
+    word_vec_norm = word_vec / np.linalg.norm(word_vec)
+
+    # Získání všech ostatních vektorů kromě dotazovaného slova
     other_indices = [i for i in range(embeddings.shape[0]) if i != word_idx]
     other_vecs = embeddings[other_indices]
 
-    similarities = cosine_similarity(word_vec, other_vecs)[0]
+    # Normalizace všech vektorů pro lepší výpočet kosinové podobnosti
+    other_vecs_norm = other_vecs / np.linalg.norm(other_vecs, axis=1, keepdims=True)
+
+    # Výpočet kosinové podobnosti
+    similarities = cosine_similarity(word_vec_norm, other_vecs_norm)[0]
 
     sorted_indices = np.argsort(similarities)[::-1]
     neighbors = [(idx_to_word[other_indices[i]], similarities[i]) for i in sorted_indices[:n]]
@@ -478,7 +631,7 @@ def main():
     window_size = 2
     embedding_dim = 100
     learning_rate = 0.01
-    epochs = 5
+    epochs = 1
     batch_size = 256
     visualize_sample_count = 750
 
