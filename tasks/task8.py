@@ -354,7 +354,10 @@ def load_model(output_dir, vocab_size, embedding_dim=100):
 
     model = CBOW_PyTorch(vocab_size, embedding_dim)
     try:
-        model.load_state_dict(torch.load(model_path))
+        if DEVICE == "cuda" and torch.cuda.is_available():
+            model.load_state_dict(torch.load(model_path))
+        else:
+            model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
         print(f"Model successfully loaded")
         return model
     except Exception as e:
