@@ -651,6 +651,18 @@ def main():
 
     # 8. Porovnání ztrát během tréninku
     print("\n=== Training Loss Comparison ===")
+    # Poznámka: Implementace od základů používá negativní vzorkování, zatímco PyTorch implementace 
+    # používá cross-entropy loss. Tento zásadní rozdíl ve výpočtu ztrát 
+    # vysvětluje, proč jsou hodnoty a křivky ztrát mezi implementacemi tak odlišné.
+    # 
+    # Klíčové rozdíly mezi implementacemi:
+    # - Scratch: Přímo používá negativní vzorkování, vybírá náhodná necílová slova jako negativní příklady
+    # - PyTorch: Používá cross-entropy ztrátu, která implicitně bere v úvahu všechna slova ve slovníku
+    # - Scratch: Aktualizuje váhy pomocí vlastních výpočtů gradientů a ručně optimalizovaného učení
+    # - PyTorch: Používá optimalizátor Adam s automatickou diferenciací
+    # - Scratch: Přímo manipuluje s embedding maticemi pomocí numpy operací
+    # - PyTorch: Používá vrstvy neuronové sítě s GPU akcelerací, když je k dispozici
+
     plt.figure(figsize=(10, 6))
     plt.plot(range(1, epochs + 1), pytorch_losses, 'b-', marker='o', label='PyTorch')
     plt.plot(range(1, epochs + 1), scratch_losses, 'r-', marker='s', label='From Scratch')
